@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import Annotated, List, Optional
 
 import bcrypt
+import io
 import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, APIRouter, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import StreamingResponse
 from jwt.exceptions import InvalidTokenError
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
@@ -93,9 +95,11 @@ class EmployeeCreate(EmployeeUpsert):
 
 class POCreate(BaseModel):
     po_number: str
-    project_name: str
-    location: str
+    site_code: str
+    release_date: str
     po_amount: float
+    status: str = "Plan"
+    project_name: Optional[str] = None
     budget: Optional[float] = None
 
 
@@ -103,7 +107,9 @@ class PO(BaseModel):
     id: str
     po_number: str
     project_name: str
-    location: str
+    site_code: str = ""
+    release_date: str = ""
+    location: str = ""
     po_amount: float
     budget: float
     actual_cost: float = 0
@@ -119,7 +125,6 @@ class CostCreate(BaseModel):
     category: str
     amount: float
     keterangan: str = ""
-    remarks: str
 
 
 class InvoiceCreate(BaseModel):
@@ -283,14 +288,25 @@ async def create_po(body: POCreate, user: Annotated[dict, Depends(current_user)]
     existing = await db.pos.find_one({"po_number": body.po_number})
     if existing:
         raise HTTPException(status_code=400, detail="PO number already exists")
+    status = body.status if body.status in ("Plan", "Active") else "Plan"
     doc = {
-        "id": str(uuid.uuid4()), "po_number": body.po_number, "project_name": body.project_name,
-        "location": body.location, "po_amount": body.po_amount,
-        "budget": body.budget if body.budget else body.po_amount * 0.35, "status": "Active",
+        "id": str(uuid.uuid4()), "po_number": body.po_number,
+        "project_name": body.project_name or body.site_code,
+        "site_code": body.site_code, "release_date": body.release_date, "location": "",
+        "po_amount": body.po_amount,
+        "budget": body.budget if body.budget else body.po_amount * 0.35, "status": status,
     }
     await db.pos.insert_one(doc)
     doc.pop("_id", None)
     return PO(**doc, actual_cost=0, utilization=0)
+
+
+@api.delete("/pos/{po_number}", status_code=204)
+async def delete_po(po_number: str, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] not in ("Owner", "PM", "PCM", "Project Manager", "Project Controller"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    await db.pos.delete_one({"po_number": po_number})
+    return None
 
 
 # ---- invoices ----
@@ -324,6 +340,14 @@ async def toggle_invoice(invoice_number: str, user: Annotated[dict, Depends(curr
     return {"invoice_number": invoice_number, "paid": new_paid}
 
 
+@api.delete("/invoices/{invoice_number}", status_code=204)
+async def delete_invoice(invoice_number: str, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] not in ("Owner", "PM", "PCM", "Project Manager", "Project Controller"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    await db.invoices.delete_one({"invoice_number": invoice_number})
+    return None
+
+
 # ---- operational costs ----
 @api.get("/costs")
 async def list_costs(user: Annotated[dict, Depends(current_user)]):
@@ -333,19 +357,27 @@ async def list_costs(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/costs")
 async def create_cost(body: CostCreate, user: Annotated[dict, Depends(current_user)]):
-    if not body.remarks.strip():
-        raise HTTPException(status_code=400, detail="Remarks wajib diisi")
+    if not body.site_name.strip():
+        raise HTTPException(status_code=400, detail="Site Name wajib diisi")
     month = body.date[:7] if len(body.date) >= 7 and body.date[4] == "-" else CURRENT_MONTH
     doc = {
         "id": str(uuid.uuid4()), "date": body.date, "month": month, "project_name": body.project_name,
         "site_name": body.site_name, "post": body.post, "category": body.category, "amount": body.amount,
-        "keterangan": body.keterangan, "remarks": body.remarks, "submitted_by": user["name"],
+        "keterangan": body.keterangan, "submitted_by": user["name"],
         "submitted_by_id": user["employee_id"], "role": user["role"], "status": "Pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.costs.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@api.delete("/costs/{cost_id}", status_code=204)
+async def delete_cost(cost_id: str, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] != "Owner":
+        raise HTTPException(status_code=403, detail="Hanya Owner yang dapat menghapus transaksi")
+    await db.costs.delete_one({"id": cost_id})
+    return None
 
 
 # ---- employees ----
@@ -418,6 +450,92 @@ async def pay_all(user: Annotated[dict, Depends(current_user)]):
     return {"message": "All marked paid"}
 
 
+# ---- reports (Excel / PDF) ----
+REPORT_COLUMNS = {
+    "costs": (["Date", "Project", "Site Name", "Post", "Category", "Amount", "Keterangan", "Submitted By", "Role", "Status"],
+              lambda c: [c.get("date"), c.get("project_name"), c.get("site_name"), c.get("post"), c.get("category"), c.get("amount"), c.get("keterangan"), c.get("submitted_by"), c.get("role"), c.get("status")]),
+    "pos": (["PO Number", "Site Code", "Release Date", "PO Amount", "Actual Cost", "Status"],
+            lambda p: [p.get("po_number"), p.get("site_code"), p.get("release_date"), p.get("po_amount"), p.get("actual_cost"), p.get("status")]),
+    "invoices": (["Invoice", "PO Number", "Amount", "Due Date", "Status"],
+                 lambda i: [i.get("invoice_number"), i.get("po_number"), i.get("amount"), i.get("due_date"), "Terbayar" if i.get("paid") else "Belum"]),
+}
+
+
+def _decode_token_or_401(token: str) -> dict:
+    err = HTTPException(status_code=401, detail="Invalid token")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if not payload.get("sub"):
+            raise err
+    except InvalidTokenError:
+        raise err
+    return payload
+
+
+async def _report_rows(kind: str):
+    if kind == "costs":
+        rows = await db.costs.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    elif kind == "pos":
+        rows = await build_pos()
+    elif kind == "invoices":
+        rows = await db.invoices.find({}, {"_id": 0}).sort("invoice_number", 1).to_list(5000)
+    else:
+        raise HTTPException(status_code=404, detail="Unknown report")
+    return rows
+
+
+@api.get("/reports/{kind}")
+async def report(kind: str, fmt: str = "xlsx", token: str = ""):
+    _decode_token_or_401(token)
+    if kind not in REPORT_COLUMNS:
+        raise HTTPException(status_code=404, detail="Unknown report")
+    headers, mapper = REPORT_COLUMNS[kind]
+    rows = await _report_rows(kind)
+    title = {"costs": "Operational Cost", "pos": "Purchase Orders", "invoices": "Invoices"}[kind]
+    filename = f"teleconi_{kind}"
+
+    if fmt == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4), title=title)
+        styles = getSampleStyleSheet()
+        data = [headers] + [[str(x if x is not None else "") for x in mapper(r)] for r in rows]
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1769E0")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCD6E5")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F7FD")]),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        doc.build([Paragraph(f"Teleconi Tracker — {title}", styles["Title"]), Spacer(1, 10), table])
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}.pdf"})
+
+    # default xlsx
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = title[:31]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1769E0")
+    for r in rows:
+        ws.append([x if x is not None else "" for x in mapper(r)])
+    for i, _ in enumerate(headers, 1):
+        ws.column_dimensions[chr(64 + i)].width = 18
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"})
+
+
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -432,8 +550,8 @@ DEMO_USERS = [
 ]
 
 DEMO_POS = [
-    {"id": str(uuid.uuid4()), "po_number": "PO-2026-001", "project_name": "Moratel DWDM", "location": "Bank Mandiri", "po_amount": 450_000_000, "budget": 150_000_000, "status": "Active"},
-    {"id": str(uuid.uuid4()), "po_number": "PO-2026-002", "project_name": "Moratel OLT", "location": "Bali", "po_amount": 300_000_000, "budget": 107_000_000, "status": "Active"},
+    {"id": str(uuid.uuid4()), "po_number": "PO-2026-001", "project_name": "Moratel DWDM", "site_code": "JKT-001", "release_date": "2026-01-05", "location": "Bank Mandiri", "po_amount": 450_000_000, "budget": 150_000_000, "status": "Active"},
+    {"id": str(uuid.uuid4()), "po_number": "PO-2026-002", "project_name": "Moratel OLT", "site_code": "BLI-002", "release_date": "2026-02-10", "location": "Bali", "po_amount": 300_000_000, "budget": 107_000_000, "status": "Active"},
 ]
 
 DEMO_COSTS = [

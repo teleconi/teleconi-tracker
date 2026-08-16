@@ -33,6 +33,20 @@ Build a mobile app (Android & iOS) exactly matching the HTML mockup
 - Logout button in header (appbar-logout) clears token → login.
 - Verified: 17/17 backend pytest passed; frontend role tabs + logout + create flows OK.
 
+## Implemented (2026-08-16, latest sync)
+- Submit Ops: removed "Remarks"; "Site Name *" mandatory (placeholder "Input nama kota");
+  Transaction History shows date • site_name + submitter username; Owner-only delete with
+  confirm modal → DELETE /api/costs/{id}.
+- PO & Invoice: Add/Delete PO & Invoice (Owner/PM/PCM). Add PO form = PO Number, Site Code,
+  Release Date, PO Amount, Status(Plan/Active). PO card shows those fields + status badge;
+  removed Remaining PO / Actual Cost / Cost Utilization. Add Invoice modal + delete per row,
+  all with confirm modal (DELETE /api/pos/{po_number}, /api/invoices/{invoice_number}).
+- Reusable ConfirmModal for all delete actions.
+- Report export endpoints exist in backend (/api/reports/{kind}?fmt=xlsx|pdf) — frontend
+  download buttons intentionally SKIPPED per user request.
+- DB direct-edit guide written at /app/PANDUAN_EDIT_DATABASE.md.
+- Verified: 28/28 backend pytest + full frontend role/CRUD flows passed (iteration_3).
+
 ## Backlog / Remaining
 - P0: Wire frontend to backend (auth + data), extend backend for invoices &
   posts/categories, remove local mock arrays.

@@ -149,12 +149,33 @@ function Toast({ text }: { text: string | null }) {
   const insets = useSafeAreaInsets();
   if (!text) return null;
   return (
-    <View style={[styles.toastWrap, { bottom: insets.bottom + 96, pointerEvents: "none" }]}>
+    <View pointerEvents="none" style={[styles.toastWrap, { bottom: insets.bottom + 96 }]}>
       <View style={styles.toast}>
         <Ionicons name="checkmark-circle" size={18} color="#7CE0AE" />
         <Text style={styles.toastText}>{text}</Text>
       </View>
     </View>
+  );
+}
+
+function ConfirmModal({ visible, title, message, onConfirm, onCancel }: { visible: boolean; title: string; message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.confirmBackdrop}>
+        <View style={styles.confirmBox}>
+          <Text style={styles.confirmTitle}>{title}</Text>
+          <Text style={styles.confirmMsg}>{message}</Text>
+          <View style={styles.confirmBtnRow}>
+            <Pressable testID="confirm-cancel" onPress={onCancel} style={[styles.confirmBtn, styles.confirmCancel]}>
+              <Text style={styles.confirmCancelText}>Batal</Text>
+            </Pressable>
+            <Pressable testID="confirm-delete" onPress={onConfirm} style={[styles.confirmBtn, styles.confirmDelete]}>
+              <Text style={styles.confirmDeleteText}>Hapus</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -406,6 +427,9 @@ function POInvoice({ toast }: { toast: (t: string) => void }) {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddInv, setShowAddInv] = useState(false);
+  const [confirmPO, setConfirmPO] = useState<string | null>(null);
+  const [confirmInv, setConfirmInv] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -425,7 +449,18 @@ function POInvoice({ toast }: { toast: (t: string) => void }) {
     try { await api.toggleInvoice(num); await load(); } catch (e: any) { toast(e?.message || "Gagal"); }
   };
 
-  const projectNames = Array.from(new Set(pos.map((p) => p.project_name)));
+  const doDeletePO = async () => {
+    if (!confirmPO) return;
+    try { await api.deletePO(confirmPO); setConfirmPO(null); await load(); toast("PO dihapus"); }
+    catch (e: any) { setConfirmPO(null); toast(e?.message || "Gagal menghapus PO"); }
+  };
+  const doDeleteInv = async () => {
+    if (!confirmInv) return;
+    try { await api.deleteInvoice(confirmInv); setConfirmInv(null); await load(); toast("Invoice dihapus"); }
+    catch (e: any) { setConfirmInv(null); toast(e?.message || "Gagal menghapus invoice"); }
+  };
+
+  const poNumbers = pos.map((p) => p.po_number);
 
   return (
     <>
@@ -438,65 +473,95 @@ function POInvoice({ toast }: { toast: (t: string) => void }) {
         </View>
       </Card>
 
-      {loading ? <Loading /> : pos.map((po) => {
-        const remaining = po.po_amount - po.actual_cost;
-        return (
-          <Card key={po.po_number}>
-            <View style={styles.listRow}>
-              <View><Text style={styles.strong}>{po.po_number}</Text><Muted>{po.project_name} • {po.location}</Muted></View>
-              <View style={styles.badgeApproved}><Text style={styles.badgeApprovedText}>{po.status}</Text></View>
+      {loading ? <Loading /> : pos.map((po) => (
+        <Card key={po.po_number}>
+          <View style={styles.listRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.strong}>{po.po_number}</Text>
+              <Muted>Site Code: {po.site_code || "-"}</Muted>
             </View>
-            <View style={styles.poStatRow}>
-              <View><Muted>PO Amount</Muted><Text style={styles.strong}>{fmtFull(po.po_amount)}</Text></View>
-              <View style={{ alignItems: "flex-end" }}><Muted>Actual Cost</Muted><Text style={styles.strong}>{fmtFull(po.actual_cost)}</Text></View>
+            <View style={[styles.badgeApproved, po.status === "Plan" && styles.badgePlan]}>
+              <Text style={[styles.badgeApprovedText, po.status === "Plan" && styles.badgePlanText]}>{po.status}</Text>
             </View>
-            <View style={styles.poStatRow}>
-              <View><Muted>Remaining PO</Muted><Text style={styles.strong}>{fmtFull(remaining)}</Text></View>
-              <View style={{ alignItems: "flex-end" }}><Muted>Cost Utilization</Muted><Text style={styles.strong}>{String(po.utilization).replace(".", ",")}%</Text></View>
-            </View>
-          </Card>
-        );
-      })}
+            <Pressable testID={`po-delete-${po.po_number}`} onPress={() => setConfirmPO(po.po_number)} hitSlop={8} style={{ marginLeft: 12 }}>
+              <Ionicons name="trash-outline" size={18} color={C.red} />
+            </Pressable>
+          </View>
+          <View style={styles.poStatRow}>
+            <View><Muted>Release Date</Muted><Text style={styles.strong}>{po.release_date || "-"}</Text></View>
+            <View style={{ alignItems: "flex-end" }}><Muted>PO Amount</Muted><Text style={styles.strong}>{fmtFull(po.po_amount)}</Text></View>
+          </View>
+        </Card>
+      ))}
 
       <Card>
-        <Text style={styles.h2}>Invoice Status</Text>
-        {invoices.map((inv, i) => (
+        <View style={styles.rowBetween}>
+          <Text style={styles.h2}>Invoice Status</Text>
+          <Pressable testID="invoice-add-button" onPress={() => setShowAddInv(true)} hitSlop={8}>
+            <Text style={styles.linkAdd}>+ Add Invoice</Text>
+          </Pressable>
+        </View>
+        {invoices.length === 0 ? <Muted>Belum ada invoice</Muted> : invoices.map((inv, i) => (
           <View key={inv.invoice_number} style={styles.listRow}>
             <View style={{ flex: 1, paddingRight: 10 }}>
               <Text style={styles.rowMain}>{inv.invoice_number}</Text>
               <Muted>{inv.po_number} • {fmtFull(inv.amount)} • Due {inv.due_date}</Muted>
             </View>
             <StatusPill testID={`invoice-status-${i}`} paid={inv.paid} onPress={() => toggleInv(inv.invoice_number)} />
+            <Pressable testID={`invoice-delete-${i}`} onPress={() => setConfirmInv(inv.invoice_number)} hitSlop={8} style={{ marginLeft: 10 }}>
+              <Ionicons name="trash-outline" size={18} color={C.red} />
+            </Pressable>
           </View>
         ))}
       </Card>
 
       <AddPOModal
         visible={showAdd}
-        projects={projectNames.length ? projectNames : ["Moratel DWDM", "Moratel OLT"]}
         onClose={() => setShowAdd(false)}
         onCreated={async () => { setShowAdd(false); await load(); toast("PO berhasil ditambahkan"); }}
+      />
+      <AddInvoiceModal
+        visible={showAddInv}
+        poNumbers={poNumbers}
+        onClose={() => setShowAddInv(false)}
+        onCreated={async () => { setShowAddInv(false); await load(); toast("Invoice berhasil ditambahkan"); }}
+      />
+
+      <ConfirmModal
+        visible={!!confirmPO}
+        title="Hapus PO"
+        message={`Yakin ingin menghapus PO ${confirmPO}?`}
+        onCancel={() => setConfirmPO(null)}
+        onConfirm={doDeletePO}
+      />
+      <ConfirmModal
+        visible={!!confirmInv}
+        title="Hapus Invoice"
+        message={`Yakin ingin menghapus invoice ${confirmInv}?`}
+        onCancel={() => setConfirmInv(null)}
+        onConfirm={doDeleteInv}
       />
     </>
   );
 }
 
-function AddPOModal({ visible, projects, onClose, onCreated }: { visible: boolean; projects: string[]; onClose: () => void; onCreated: () => void }) {
+function AddPOModal({ visible, onClose, onCreated }: { visible: boolean; onClose: () => void; onCreated: () => void }) {
   const insets = useSafeAreaInsets();
   const [no, setNo] = useState("");
-  const [project, setProject] = useState(projects[0]);
-  const [location, setLocation] = useState("");
+  const [siteCode, setSiteCode] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
   const [amount, setAmount] = useState("");
+  const [status, setStatus] = useState("Plan");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const submit = async () => {
-    if (!no.trim() || !amount.trim()) { setErr("PO Number dan PO Amount wajib diisi."); return; }
+    if (!no.trim() || !siteCode.trim() || !amount.trim()) { setErr("PO Number, Site Code, dan PO Amount wajib diisi."); return; }
     setSaving(true);
     setErr("");
     try {
-      await api.createPO({ po_number: no.trim(), project_name: project, location: location || "-", po_amount: Number(amount) });
-      setNo(""); setLocation(""); setAmount("");
+      await api.createPO({ po_number: no.trim(), site_code: siteCode.trim(), release_date: releaseDate.trim(), po_amount: Number(amount), status });
+      setNo(""); setSiteCode(""); setReleaseDate(""); setAmount(""); setStatus("Plan");
       onCreated();
     } catch (e: any) {
       setErr(e?.message || "Gagal menambah PO.");
@@ -519,17 +584,83 @@ function AddPOModal({ visible, projects, onClose, onCreated }: { visible: boolea
             <Label>PO Number</Label>
             <Input testID="po-number-input" value={no} onChangeText={setNo} placeholder="PO-2026-003" />
             <View style={{ height: 12 }} />
-            <Label>Project</Label>
-            <Select value={project} options={projects} onSelect={setProject} testID="po-project-select" />
+            <Label>Site Code</Label>
+            <Input testID="po-sitecode-input" value={siteCode} onChangeText={setSiteCode} placeholder="Contoh: JKT-003" />
             <View style={{ height: 12 }} />
-            <Label>Location</Label>
-            <Input testID="po-location-input" value={location} onChangeText={setLocation} placeholder="Lokasi project" />
+            <Label>Release Date</Label>
+            <Input testID="po-release-input" value={releaseDate} onChangeText={setReleaseDate} placeholder="YYYY-MM-DD" />
             <View style={{ height: 12 }} />
             <Label>PO Amount</Label>
             <Input testID="po-amount-input" value={amount} onChangeText={setAmount} placeholder="0" keyboardType="numeric" />
+            <View style={{ height: 12 }} />
+            <Label>Status</Label>
+            <Select value={status} options={["Plan", "Active"]} onSelect={setStatus} testID="po-status-select" />
             {err ? <Text style={styles.errorText}>{err}</Text> : null}
             <Pressable testID="po-save-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Save PO</Text>}
+            </Pressable>
+          </KeyboardAwareScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function AddInvoiceModal({ visible, poNumbers, onClose, onCreated }: { visible: boolean; poNumbers: string[]; onClose: () => void; onCreated: () => void }) {
+  const insets = useSafeAreaInsets();
+  const [no, setNo] = useState("");
+  const [poNo, setPoNo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [due, setDue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => { if (poNumbers.length && !poNo) setPoNo(poNumbers[0]); }, [poNumbers, poNo]);
+
+  const submit = async () => {
+    if (!no.trim() || !amount.trim()) { setErr("Invoice Number dan Amount wajib diisi."); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      await api.createInvoice({ invoice_number: no.trim(), po_number: poNo || "-", amount: Number(amount), due_date: due.trim() || "-" });
+      setNo(""); setAmount(""); setDue("");
+      onCreated();
+    } catch (e: any) {
+      setErr(e?.message || "Gagal menambah invoice.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.h2}>Add Invoice</Text>
+            <Pressable testID="inv-modal-close" onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={24} color={C.text} />
+            </Pressable>
+          </View>
+          <KeyboardAwareScrollView bottomOffset={24} showsVerticalScrollIndicator={false}>
+            <Label>Invoice Number</Label>
+            <Input testID="inv-number-input" value={no} onChangeText={setNo} placeholder="INV-2026-005" />
+            <View style={{ height: 12 }} />
+            <Label>PO Number</Label>
+            {poNumbers.length ? (
+              <Select value={poNo || poNumbers[0]} options={poNumbers} onSelect={setPoNo} testID="inv-po-select" />
+            ) : (
+              <Input testID="inv-po-input" value={poNo} onChangeText={setPoNo} placeholder="PO Number" />
+            )}
+            <View style={{ height: 12 }} />
+            <Label>Amount</Label>
+            <Input testID="inv-amount-input" value={amount} onChangeText={setAmount} placeholder="0" keyboardType="numeric" />
+            <View style={{ height: 12 }} />
+            <Label>Due Date</Label>
+            <Input testID="inv-due-input" value={due} onChangeText={setDue} placeholder="25 Aug 2026" />
+            {err ? <Text style={styles.errorText}>{err}</Text> : null}
+            <Pressable testID="inv-save-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
+              {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Save Invoice</Text>}
             </Pressable>
           </KeyboardAwareScrollView>
         </View>
@@ -552,26 +683,27 @@ const POST_CATEGORIES: Record<string, string[]> = {
 };
 const POSTS = Object.keys(POST_CATEGORIES);
 
-function SubmitOps({ toast }: { toast: (t: string) => void }) {
+function SubmitOps({ toast, user }: { toast: (t: string) => void; user: SessionUser }) {
+  const isOwner = user.role === "Owner";
   const [projects, setProjects] = useState<string[]>(["Moratel DWDM", "Moratel OLT"]);
   const [txns, setTxns] = useState<any[]>([]);
   const [date, setDate] = useState("2026-08-14");
   const [project, setProject] = useState("Moratel DWDM");
-  const [site, setSite] = useState("Bank Mandiri - Jakarta");
+  const [site, setSite] = useState("");
   const [post, setPost] = useState(POSTS[0]);
   const [category, setCategory] = useState(POST_CATEGORIES[POSTS[0]][0]);
   const [amount, setAmount] = useState("450000");
   const [ket, setKet] = useState("");
-  const [remarks, setRemarks] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const load = async () => {
     try {
       const p = await api.pos();
       if (p.pos.length) { setProjects(Array.from(new Set(p.pos.map((x) => x.project_name)))); setProject(p.pos[0].project_name); }
       const c = await api.costs();
-      setTxns(c.costs.slice(0, 10));
+      setTxns(c.costs.slice(0, 20));
     } catch { /* ignore */ }
   };
   useEffect(() => { load(); }, []);
@@ -579,19 +711,32 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
   const onPost = (p: string) => { setPost(p); setCategory(POST_CATEGORIES[p][0]); };
 
   const submit = async () => {
-    if (!remarks.trim()) { setError("Remarks wajib diisi sebelum submit."); return; }
+    if (!site.trim()) { setError("Site Name (nama kota) wajib diisi."); return; }
     if (!amount.trim() || isNaN(Number(amount))) { setError("Amount harus berupa angka."); return; }
     setSaving(true);
     setError("");
     try {
-      await api.createCost({ date, project_name: project, site_name: site, post, category, amount: Number(amount), keterangan: ket, remarks });
-      setRemarks(""); setKet("");
+      await api.createCost({ date, project_name: project, site_name: site.trim(), post, category, amount: Number(amount), keterangan: ket });
+      setKet("");
       await load();
       toast("Cost berhasil disubmit");
     } catch (e: any) {
       setError(e?.message || "Gagal submit cost.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const doDelete = async () => {
+    if (!confirmId) return;
+    try {
+      await api.deleteCost(confirmId);
+      setConfirmId(null);
+      await load();
+      toast("Transaksi dihapus");
+    } catch (e: any) {
+      setConfirmId(null);
+      toast(e?.message || "Gagal menghapus");
     }
   };
 
@@ -605,8 +750,8 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
         <Label>Project</Label>
         <Select value={project} options={projects} onSelect={setProject} testID="op-project-select" />
         <View style={{ height: 12 }} />
-        <Label>Site Name</Label>
-        <Input testID="op-site-input" value={site} onChangeText={setSite} />
+        <Label>Site Name *</Label>
+        <Input testID="op-site-input" value={site} onChangeText={setSite} placeholder="Input nama kota" />
         <View style={{ height: 12 }} />
         <Label>Post</Label>
         <Select value={post} options={POSTS} onSelect={onPost} testID="op-post-select" />
@@ -627,17 +772,6 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
           multiline
           style={[styles.input, styles.textarea]}
         />
-        <View style={{ height: 12 }} />
-        <Label>Remarks *</Label>
-        <TextInput
-          testID="op-remarks-input"
-          value={remarks}
-          onChangeText={setRemarks}
-          placeholder="Remarks wajib diisi sebelum submit"
-          placeholderTextColor="#9AA7B8"
-          multiline
-          style={[styles.input, styles.textarea]}
-        />
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <Pressable testID="op-submit-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
           {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Submit Cost</Text>}
@@ -651,12 +785,28 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
             <View style={styles.txIcon}><Ionicons name={postIcon(t.post)} size={18} color={C.blue} /></View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.rowMain}>{t.category}</Text>
-              <Muted>{t.date} • {t.project_name}</Muted>
+              <Muted>{t.date} • {t.site_name}</Muted>
+              <Muted>{t.submitted_by}</Muted>
             </View>
-            <Text style={styles.strong}>{fmtFull(t.amount)}</Text>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.strong}>{fmtFull(t.amount)}</Text>
+              {isOwner && (
+                <Pressable testID={`tx-delete-${t.id}`} onPress={() => setConfirmId(t.id)} hitSlop={8} style={{ marginTop: 6 }}>
+                  <Ionicons name="trash-outline" size={18} color={C.red} />
+                </Pressable>
+              )}
+            </View>
           </View>
         ))}
       </Card>
+
+      <ConfirmModal
+        visible={!!confirmId}
+        title="Hapus Transaksi"
+        message="Yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan."
+        onCancel={() => setConfirmId(null)}
+        onConfirm={doDelete}
+      />
     </>
   );
 }
@@ -1009,7 +1159,7 @@ export default function Index() {
     switch (screen) {
       case "dashboard": return <Dashboard />;
       case "po": return <POInvoice toast={showToast} />;
-      case "operational": return <SubmitOps toast={showToast} />;
+      case "operational": return <SubmitOps toast={showToast} user={currentUser!} />;
       case "users": return <EmployeeManagement toast={showToast} user={currentUser!} refreshUser={refreshUser} />;
       case "password": return <ChangePassword toast={showToast} onDone={() => setScreen(allowedScreens(currentUser!.role)[0])} />;
     }
@@ -1178,6 +1328,9 @@ const styles = StyleSheet.create({
   poStatRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, marginTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   badgeApproved: { backgroundColor: C.greenBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   badgeApprovedText: { color: C.green, fontSize: 11.5, fontWeight: "800" },
+  badgePlan: { backgroundColor: "#FFF3D6" },
+  badgePlanText: { color: "#B7791F" },
+  linkAdd: { color: C.blue, fontSize: 13, fontWeight: "800" },
   badge: { backgroundColor: C.paleBlue, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   badgeText: { color: C.blue, fontSize: 12, fontWeight: "800" },
 
@@ -1210,4 +1363,15 @@ const styles = StyleSheet.create({
   toastWrap: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   toast: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.text, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 },
   toastText: { color: C.white, fontWeight: "700", fontSize: 13 },
+
+  confirmBackdrop: { flex: 1, backgroundColor: "rgba(15,27,45,0.45)", justifyContent: "center", padding: 32 },
+  confirmBox: { backgroundColor: C.white, borderRadius: 18, padding: 20 },
+  confirmTitle: { fontSize: 17, fontWeight: "800", color: C.text, marginBottom: 8 },
+  confirmMsg: { fontSize: 13.5, color: C.muted, lineHeight: 20, marginBottom: 18 },
+  confirmBtnRow: { flexDirection: "row", gap: 12 },
+  confirmBtn: { flex: 1, minHeight: 46, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  confirmCancel: { backgroundColor: "#EEF2F7" },
+  confirmCancelText: { color: C.text, fontWeight: "800", fontSize: 14 },
+  confirmDelete: { backgroundColor: C.red },
+  confirmDeleteText: { color: C.white, fontWeight: "800", fontSize: 14 },
 });

@@ -71,11 +71,16 @@ export const api = {
   dashboard: (project?: string): Promise<any> =>
     req("/dashboard" + (project && project !== "All Project" ? `?project=${encodeURIComponent(project)}` : "")),
   pos: (): Promise<{ pos: any[]; total_po: number; total_actual: number; remaining: number }> => req("/pos"),
-  createPO: (data: { po_number: string; project_name: string; location: string; po_amount: number }): Promise<any> =>
+  createPO: (data: { po_number: string; site_code: string; release_date: string; po_amount: number; status: string }): Promise<any> =>
     req("/pos", { method: "POST", body: JSON.stringify(data) }),
+  deletePO: (poNumber: string): Promise<null> => req(`/pos/${encodeURIComponent(poNumber)}`, { method: "DELETE" }),
   invoices: (): Promise<{ invoices: any[] }> => req("/invoices"),
+  createInvoice: (data: { invoice_number: string; po_number: string; amount: number; due_date: string }): Promise<any> =>
+    req("/invoices", { method: "POST", body: JSON.stringify(data) }),
   toggleInvoice: (invoiceNumber: string): Promise<{ invoice_number: string; paid: boolean }> =>
     req(`/invoices/${invoiceNumber}/toggle`, { method: "POST" }),
+  deleteInvoice: (invoiceNumber: string): Promise<null> => req(`/invoices/${encodeURIComponent(invoiceNumber)}`, { method: "DELETE" }),
   costs: (): Promise<{ costs: any[]; count: number }> => req("/costs"),
   createCost: (data: any): Promise<any> => req("/costs", { method: "POST", body: JSON.stringify(data) }),
+  deleteCost: (id: string): Promise<null> => req(`/costs/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
