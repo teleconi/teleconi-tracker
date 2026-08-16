@@ -27,7 +27,7 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 TOKEN_MINUTES = int(os.environ.get("ACCESS_TOKEN_MINUTES", "720"))
 
-ROLES = {"Owner", "Engineer", "PM", "Project Manager", "Project Controller"}
+ROLES = {"Owner", "Engineer", "PM", "PCM", "Project Manager", "Project Controller"}
 CATEGORIES = ["Makan", "Penginapan", "Transport", "Others"]
 CURRENT_MONTH = "2026-08"
 
@@ -270,7 +270,7 @@ async def list_pos(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/pos", response_model=PO)
 async def create_po(body: POCreate, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+    if user["role"] not in ("Owner", "PM", "PCM", "Project Manager", "Project Controller"):
         raise HTTPException(status_code=403, detail="Not allowed to add POs")
     existing = await db.pos.find_one({"po_number": body.po_number})
     if existing:
@@ -294,7 +294,7 @@ async def list_invoices(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/invoices")
 async def create_invoice(body: InvoiceCreate, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+    if user["role"] not in ("Owner", "PM", "PCM", "Project Manager", "Project Controller"):
         raise HTTPException(status_code=403, detail="Not allowed")
     if await db.invoices.find_one({"invoice_number": body.invoice_number}):
         raise HTTPException(status_code=400, detail="Invoice number already exists")
@@ -306,7 +306,7 @@ async def create_invoice(body: InvoiceCreate, user: Annotated[dict, Depends(curr
 
 @api.post("/invoices/{invoice_number}/toggle")
 async def toggle_invoice(invoice_number: str, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+    if user["role"] not in ("Owner", "PM", "PCM", "Project Manager", "Project Controller"):
         raise HTTPException(status_code=403, detail="Not allowed")
     inv = await db.invoices.find_one({"invoice_number": invoice_number})
     if not inv:
@@ -420,7 +420,7 @@ DEMO_USERS = [
     {"employee_id": "00201", "name": "Pahala Sidauruk", "role": "PM", "password": "123", "email": "pahala@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7151611471", "salary_amount": 0},
     {"employee_id": "00202", "name": "Yendro Makendro Sija", "role": "Engineer", "password": "123", "email": "yendro@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "Mandiri", "no_rek": "7151611471", "salary_amount": 0},
     {"employee_id": "00203", "name": "Rofinus Hada", "role": "Engineer", "password": "123", "email": "rofinus@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7795330801", "salary_amount": 0},
-    {"employee_id": "00204", "name": "Aldi Efendi", "role": "Engineer", "password": "123", "email": "aldi@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7535113980", "salary_amount": 0},
+    {"employee_id": "00204", "name": "Devi", "role": "PCM", "password": "123", "email": "tbd", "ktp": "tbd", "join_date": "tbd", "bpjs": "tbd", "address": "tbd", "gaji": "tbd", "bank": "tbd", "no_rek": "tbd", "salary_amount": 0},
 ]
 
 DEMO_POS = [
@@ -431,14 +431,14 @@ DEMO_POS = [
 DEMO_COSTS = [
     {"date": "2026-01-14", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "4.0 Transportation", "category": "4.1 Flight", "amount": 12_000_000, "remarks": "Site mobilization", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
     {"date": "2026-02-09", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "3.0 Accomodation", "category": "3.1 Hotel", "amount": 15_000_000, "remarks": "Team lodging", "submitted_by": "Rofinus Hada", "role": "Engineer"},
-    {"date": "2026-03-21", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 8_200_000, "remarks": "Crew fuel", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-03-21", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 8_200_000, "remarks": "Crew fuel", "submitted_by": "Devi", "role": "Engineer"},
     {"date": "2026-04-05", "project_name": "Moratel DWDM", "site_name": "Bekasi", "post": "7.0 Other Project Cost", "category": "7.1 Others", "amount": 20_000_000, "remarks": "Material handling", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
     {"date": "2026-05-16", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "4.0 Transportation", "category": "4.3 Rental Car", "amount": 18_000_000, "remarks": "Equipment transport", "submitted_by": "Pahala Sidauruk", "role": "PM"},
     {"date": "2026-06-12", "project_name": "Moratel DWDM", "site_name": "Bandung", "post": "3.0 Accomodation", "category": "3.1 Hotel", "amount": 28_200_000, "remarks": "Extended stay", "submitted_by": "Rofinus Hada", "role": "Engineer"},
-    {"date": "2026-07-08", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "7.0 Other Project Cost", "category": "7.1 Others", "amount": 22_000_000, "remarks": "Splicing consumables", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-07-08", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "7.0 Other Project Cost", "category": "7.1 Others", "amount": 22_000_000, "remarks": "Splicing consumables", "submitted_by": "Devi", "role": "Engineer"},
     {"date": "2026-08-17", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "2.0 Operational", "category": "2.2 Toll", "amount": 450_000, "remarks": "Toll — day shift", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
     {"date": "2026-08-15", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "4.0 Transportation", "category": "4.2 Train", "amount": 1_200_000, "remarks": "Site transport", "submitted_by": "Rofinus Hada", "role": "Engineer"},
-    {"date": "2026-08-18", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 4_000_000, "remarks": "Crew fuel", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-08-18", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 4_000_000, "remarks": "Crew fuel", "submitted_by": "Devi", "role": "Engineer"},
     {"date": "2026-08-11", "project_name": "Moratel DWDM", "site_name": "Bekasi", "post": "5.0 Rental", "category": "5.1 Equipment Rental", "amount": 38_900_000, "remarks": "Fiber drum rental", "submitted_by": "Pahala Sidauruk", "role": "PM"},
 ]
 

@@ -940,7 +940,7 @@ function ChangePassword({ toast, onDone }: { toast: (t: string) => void; onDone:
 
 const allowedScreens = (role: string): Screen[] => {
   if (role === "Owner") return ["dashboard", "po", "operational", "users"];
-  if (role === "PM" || role === "Project Manager" || role === "Project Controller") return ["po", "operational"];
+  if (role === "PM" || role === "PCM" || role === "Project Manager" || role === "Project Controller") return ["po", "operational"];
   return ["operational"]; // Engineer + fallback
 };
 
