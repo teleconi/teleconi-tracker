@@ -1,0 +1,30 @@
+{
+  "summary": "Backend: 17/17 pytest cases passed (auth, dashboard, POs, invoices, costs, employees RBAC). Frontend (390x844): role-based tabs verified for Owner (4 tabs), PM (po+operational only), Engineer (operational only); logout works; Add PO modal now saves and new PO appears in list; invoice status toggle persists (Terbayar<->Belum); Submit Ops empty-remarks validation shown; cost submission with remarks succeeds. Two minor console issues: duplicate React key warning when multiple POs share a project name (Select options), and deprecated pointerEvents prop in Toast. Deprecated packages: none detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Toast/View", "issue": "props.pointerEvents is deprecated in RN; move to style.pointerEvents. Reference: /app/frontend/app/index.tsx:152 (Toast <View pointerEvents=\\\"none\\\">)"},
+      {"component": "Select/AddPOModal", "issue": "Duplicate React key warning 'Moratel DWDM' — projectNames list can contain duplicate project names across POs, then Select maps options with key={opt}. Dedupe project names before passing to Select. Reference: /app/frontend/app/index.tsx:407 (const projectNames = pos.map(...)) and Select options render at line 127."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Dedupe project names before passing to AddPOModal Select: Array.from(new Set(pos.map(p => p.project_name))). Fixes duplicate-key React warning.",
+    "Replace <View pointerEvents=\"none\"> with style={{ pointerEvents: 'none' }} in Toast."
+  ],
+  "critical_code_review_comments": [
+    "server.py uses deprecated FastAPI @app.on_event('startup'/'shutdown') — migrate to lifespan context manager.",
+    "index.tsx is ~1200 lines; consider splitting Dashboard/POInvoice/SubmitOps/Employee into separate files under /app/frontend/app/components/ for maintainability.",
+    "PATCH /api/employees allows Owner to change role but there is no validation that role stays within ROLES set beyond Pydantic default — consider validating explicitly to prevent bad data."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/test_reports/iteration_2.json"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% of covered flows (role tabs, logout, dashboard, PO create, invoice toggle, ops validation + submit)"},
+  "seed_data_creation": "Tests create TEST_-prefixed cost/PO/employee entries via API; not cleaned up (idempotent-safe since unique IDs).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend BASE_URL=$EXPO_PUBLIC_BACKEND_URL. Test creds: 00101 Owner, 00201 PM, 00202 Engineer, all pw=123. All required flows tested end-to-end (backend + frontend). Only two minor RN warnings remain (see react_native_issues).",
+  "rca_of_issue": "N/A — all requested features working. Duplicate-key warning root cause: seeded plus newly created POs can share the same project_name; projectNames array feeds Select options with key={opt}, producing duplicates. Fix by de-duplicating."
+}

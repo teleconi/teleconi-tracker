@@ -67,4 +67,14 @@ export const api = {
     req("/employees", { method: "POST", body: JSON.stringify(data) }),
   toggleSalary: (employee_id: string): Promise<{ employee_id: string; paid: boolean }> =>
     req("/salaries/toggle", { method: "POST", body: JSON.stringify({ employee_id }) }),
+
+  dashboard: (): Promise<any> => req("/dashboard"),
+  pos: (): Promise<{ pos: any[]; total_po: number; total_actual: number; remaining: number }> => req("/pos"),
+  createPO: (data: { po_number: string; project_name: string; location: string; po_amount: number }): Promise<any> =>
+    req("/pos", { method: "POST", body: JSON.stringify(data) }),
+  invoices: (): Promise<{ invoices: any[] }> => req("/invoices"),
+  toggleInvoice: (invoiceNumber: string): Promise<{ invoice_number: string; paid: boolean }> =>
+    req(`/invoices/${invoiceNumber}/toggle`, { method: "POST" }),
+  costs: (): Promise<{ costs: any[]; count: number }> => req("/costs"),
+  createCost: (data: any): Promise<any> => req("/costs", { method: "POST", body: JSON.stringify(data) }),
 };

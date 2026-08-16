@@ -23,13 +23,15 @@ Build a mobile app (Android & iOS) exactly matching the HTML mockup
   Employee List (Andi/Budi/Citra/Deni), Salary Status table (toggle paid).
 
 ## Implemented (2026-08-16)
-- Full visual mockup replicating Draft29 exactly (all screens).
-- Users seeded from user-id.xlsx; default password `123`.
-- WIRED TO BACKEND (real): login (JWT, persisted token), GET /auth/me,
-  GET /employees, PATCH /employees/{id} (Save Profile), POST /employees (Add Employee).
-- Owner-only enforcement on server (require_owner → 403 for non-Owner) and in UI
-  (read-only fields, hidden Save/Add for non-Owner). Verified via curl + Playwright.
-- Salary status toggle wired to POST /salaries/toggle (Owner only).
+- Full mockup replicating Draft29; users seeded from user-id.xlsx (password `123`).
+- FULLY WIRED TO BACKEND: auth (JWT, persisted), Employee (list/save/add, Owner-only),
+  Dashboard (real KPIs + trend + cost_by_project/category/user), PO (list/create),
+  Invoice (list + toggle paid), Submit Ops (create cost + transaction history).
+- Role-based tab access: Owner = Dashboard/PO&Invoice/Submit Ops/Employee;
+  PM & PCM = PO&Invoice + Submit Ops; Engineer = Submit Ops only. Enforced in UI
+  (allowedScreens) and on server (403 for non-Owner on employee writes).
+- Logout button in header (appbar-logout) clears token → login.
+- Verified: 17/17 backend pytest passed; frontend role tabs + logout + create flows OK.
 
 ## Backlog / Remaining
 - P0: Wire frontend to backend (auth + data), extend backend for invoices &

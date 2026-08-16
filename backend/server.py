@@ -115,9 +115,18 @@ class CostCreate(BaseModel):
     date: str
     project_name: str
     site_name: str
+    post: str
     category: str
     amount: float
-    keterangan: str
+    keterangan: str = ""
+    remarks: str
+
+
+class InvoiceCreate(BaseModel):
+    invoice_number: str
+    po_number: str
+    amount: float
+    due_date: str
 
 
 class ChangePassword(BaseModel):
@@ -220,7 +229,18 @@ async def dashboard(user: Annotated[dict, Depends(current_user)]):
     trend = [{"month": m, "label": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"][i], "total": float(trend_map.get(m, 0))} for i, m in enumerate(months)]
     peak = max(trend, key=lambda x: x["total"]) if trend else {"label": "-", "total": 0}
 
-    summary = [{"project_name": p["project_name"], "po_amount": p["po_amount"], "actual_cost": p["actual_cost"], "remaining": p["po_amount"] - p["actual_cost"]} for p in pos]
+    summary = [{"project_name": p["project_name"], "po_amount": p["po_amount"], "budget": p["budget"], "actual_cost": p["actual_cost"], "remaining": p["po_amount"] - p["actual_cost"]} for p in pos]
+
+    total_cost = total_actual or 1
+    cost_by_project = [{"name": p["project_name"], "pct": round(p["actual_cost"] / total_cost * 100)} for p in pos if p["actual_cost"] > 0]
+
+    cat_pipe = [{"$group": {"_id": "$post", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}]
+    cat_raw = await db.costs.aggregate(cat_pipe).to_list(100)
+    cost_by_category = [{"name": c["_id"] or "Lainnya", "pct": round(c["total"] / total_cost * 100)} for c in cat_raw]
+
+    user_pipe = [{"$group": {"_id": "$submitted_by", "total": {"$sum": "$amount"}, "role": {"$first": "$role"}}}, {"$sort": {"total": -1}}, {"$limit": 5}]
+    user_raw = await db.costs.aggregate(user_pipe).to_list(100)
+    cost_by_user = [{"name": u["_id"] or "-", "role": u.get("role") or "", "total": float(u["total"])} for u in user_raw]
 
     return {
         "greeting_name": user["name"].split(" ")[0],
@@ -233,6 +253,9 @@ async def dashboard(user: Annotated[dict, Depends(current_user)]):
         "summary": summary,
         "trend": trend,
         "peak_month": peak,
+        "cost_by_project": cost_by_project,
+        "cost_by_category": cost_by_category,
+        "cost_by_user": cost_by_user,
     }
 
 
@@ -247,8 +270,8 @@ async def list_pos(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/pos", response_model=PO)
 async def create_po(body: POCreate, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "PM", "Project Manager"):
-        raise HTTPException(status_code=403, detail="Only Owner or Project Manager can add POs")
+    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+        raise HTTPException(status_code=403, detail="Not allowed to add POs")
     existing = await db.pos.find_one({"po_number": body.po_number})
     if existing:
         raise HTTPException(status_code=400, detail="PO number already exists")
@@ -262,24 +285,54 @@ async def create_po(body: POCreate, user: Annotated[dict, Depends(current_user)]
     return PO(**doc, actual_cost=0, utilization=0)
 
 
+# ---- invoices ----
+@api.get("/invoices")
+async def list_invoices(user: Annotated[dict, Depends(current_user)]):
+    invoices = await db.invoices.find({}, {"_id": 0}).sort("invoice_number", 1).to_list(1000)
+    return {"invoices": invoices}
+
+
+@api.post("/invoices")
+async def create_invoice(body: InvoiceCreate, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if await db.invoices.find_one({"invoice_number": body.invoice_number}):
+        raise HTTPException(status_code=400, detail="Invoice number already exists")
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "paid": False}
+    await db.invoices.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.post("/invoices/{invoice_number}/toggle")
+async def toggle_invoice(invoice_number: str, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] not in ("Owner", "PM", "Project Manager", "Project Controller"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    inv = await db.invoices.find_one({"invoice_number": invoice_number})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    new_paid = not inv.get("paid", False)
+    await db.invoices.update_one({"invoice_number": invoice_number}, {"$set": {"paid": new_paid}})
+    return {"invoice_number": invoice_number, "paid": new_paid}
+
+
 # ---- operational costs ----
 @api.get("/costs")
 async def list_costs(user: Annotated[dict, Depends(current_user)]):
-    costs = await db.costs.find({}, {"_id": 0}).sort("date", -1).to_list(1000)
+    costs = await db.costs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return {"costs": costs, "count": len(costs)}
 
 
 @api.post("/costs")
 async def create_cost(body: CostCreate, user: Annotated[dict, Depends(current_user)]):
-    if body.category not in CATEGORIES:
-        raise HTTPException(status_code=400, detail="Invalid category")
-    if not body.keterangan.strip():
-        raise HTTPException(status_code=400, detail="Keterangan is required")
+    if not body.remarks.strip():
+        raise HTTPException(status_code=400, detail="Remarks wajib diisi")
     month = body.date[:7] if len(body.date) >= 7 and body.date[4] == "-" else CURRENT_MONTH
     doc = {
         "id": str(uuid.uuid4()), "date": body.date, "month": month, "project_name": body.project_name,
-        "site_name": body.site_name, "category": body.category, "amount": body.amount,
-        "keterangan": body.keterangan, "submitted_by": user["name"], "status": "Pending",
+        "site_name": body.site_name, "post": body.post, "category": body.category, "amount": body.amount,
+        "keterangan": body.keterangan, "remarks": body.remarks, "submitted_by": user["name"],
+        "submitted_by_id": user["employee_id"], "role": user["role"], "status": "Pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.costs.insert_one(doc)
@@ -376,17 +429,24 @@ DEMO_POS = [
 ]
 
 DEMO_COSTS = [
-    {"date": "2026-01-14", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "category": "Transport", "amount": 12_000_000, "keterangan": "Site mobilization"},
-    {"date": "2026-02-09", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "category": "Penginapan", "amount": 15_000_000, "keterangan": "Team lodging"},
-    {"date": "2026-03-21", "project_name": "Moratel OLT", "site_name": "Denpasar", "category": "Makan", "amount": 8_200_000, "keterangan": "Crew meals"},
-    {"date": "2026-04-05", "project_name": "Moratel DWDM", "site_name": "Bekasi", "category": "Others", "amount": 20_000_000, "keterangan": "Material handling"},
-    {"date": "2026-05-16", "project_name": "Moratel OLT", "site_name": "Denpasar", "category": "Transport", "amount": 18_000_000, "keterangan": "Equipment transport"},
-    {"date": "2026-06-12", "project_name": "Moratel DWDM", "site_name": "Bandung", "category": "Penginapan", "amount": 28_200_000, "keterangan": "Extended stay"},
-    {"date": "2026-07-08", "project_name": "Moratel OLT", "site_name": "Denpasar", "category": "Others", "amount": 22_000_000, "keterangan": "Splicing consumables"},
-    {"date": "2026-08-17", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "category": "Makan", "amount": 450_000, "keterangan": "Meals — day shift"},
-    {"date": "2026-08-15", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "category": "Transport", "amount": 1_200_000, "keterangan": "Site transport"},
-    {"date": "2026-08-18", "project_name": "Moratel OLT", "site_name": "Denpasar", "category": "Makan", "amount": 4_000_000, "keterangan": "Crew catering"},
-    {"date": "2026-08-11", "project_name": "Moratel DWDM", "site_name": "Bekasi", "category": "Others", "amount": 38_900_000, "keterangan": "Fiber drum purchase"},
+    {"date": "2026-01-14", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "4.0 Transportation", "category": "4.1 Flight", "amount": 12_000_000, "remarks": "Site mobilization", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
+    {"date": "2026-02-09", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "3.0 Accomodation", "category": "3.1 Hotel", "amount": 15_000_000, "remarks": "Team lodging", "submitted_by": "Rofinus Hada", "role": "Engineer"},
+    {"date": "2026-03-21", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 8_200_000, "remarks": "Crew fuel", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-04-05", "project_name": "Moratel DWDM", "site_name": "Bekasi", "post": "7.0 Other Project Cost", "category": "7.1 Others", "amount": 20_000_000, "remarks": "Material handling", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
+    {"date": "2026-05-16", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "4.0 Transportation", "category": "4.3 Rental Car", "amount": 18_000_000, "remarks": "Equipment transport", "submitted_by": "Pahala Sidauruk", "role": "PM"},
+    {"date": "2026-06-12", "project_name": "Moratel DWDM", "site_name": "Bandung", "post": "3.0 Accomodation", "category": "3.1 Hotel", "amount": 28_200_000, "remarks": "Extended stay", "submitted_by": "Rofinus Hada", "role": "Engineer"},
+    {"date": "2026-07-08", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "7.0 Other Project Cost", "category": "7.1 Others", "amount": 22_000_000, "remarks": "Splicing consumables", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-08-17", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "2.0 Operational", "category": "2.2 Toll", "amount": 450_000, "remarks": "Toll — day shift", "submitted_by": "Yendro Makendro Sija", "role": "Engineer"},
+    {"date": "2026-08-15", "project_name": "Moratel DWDM", "site_name": "Jakarta Selatan", "post": "4.0 Transportation", "category": "4.2 Train", "amount": 1_200_000, "remarks": "Site transport", "submitted_by": "Rofinus Hada", "role": "Engineer"},
+    {"date": "2026-08-18", "project_name": "Moratel OLT", "site_name": "Denpasar", "post": "2.0 Operational", "category": "2.1 Fuel", "amount": 4_000_000, "remarks": "Crew fuel", "submitted_by": "Aldi Efendi", "role": "Engineer"},
+    {"date": "2026-08-11", "project_name": "Moratel DWDM", "site_name": "Bekasi", "post": "5.0 Rental", "category": "5.1 Equipment Rental", "amount": 38_900_000, "remarks": "Fiber drum rental", "submitted_by": "Pahala Sidauruk", "role": "PM"},
+]
+
+DEMO_INVOICES = [
+    {"invoice_number": "INV-2026-001", "po_number": "PO-2026-001", "amount": 225_000_000, "due_date": "25 Aug 2026", "paid": True},
+    {"invoice_number": "INV-2026-002", "po_number": "PO-2026-001", "amount": 225_000_000, "due_date": "10 Sep 2026", "paid": False},
+    {"invoice_number": "INV-2026-003", "po_number": "PO-2026-002", "amount": 150_000_000, "due_date": "30 Aug 2026", "paid": True},
+    {"invoice_number": "INV-2026-004", "po_number": "PO-2026-002", "amount": 150_000_000, "due_date": "15 Sep 2026", "paid": False},
 ]
 
 
@@ -404,11 +464,14 @@ async def seed():
     if await db.pos.count_documents({}) == 0:
         logger.info("Seeding POs...")
         await db.pos.insert_many([dict(p) for p in DEMO_POS])
+    if await db.invoices.count_documents({}) == 0:
+        logger.info("Seeding invoices...")
+        await db.invoices.insert_many([{**i, "id": str(uuid.uuid4())} for i in DEMO_INVOICES])
     if await db.costs.count_documents({}) == 0:
         logger.info("Seeding costs...")
         costs = []
         for c in DEMO_COSTS:
-            costs.append({**c, "id": str(uuid.uuid4()), "month": c["date"][:7], "submitted_by": "Budi Santoso", "status": "Approved", "created_at": datetime.now(timezone.utc).isoformat()})
+            costs.append({**c, "id": str(uuid.uuid4()), "month": c["date"][:7], "keterangan": "", "status": "Approved", "created_at": c["date"] + "T08:00:00+00:00"})
         await db.costs.insert_many(costs)
     if await db.salaries.count_documents({"month": CURRENT_MONTH}) == 0:
         logger.info("Seeding salaries...")

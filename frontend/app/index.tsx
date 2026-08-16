@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
-import { api, ApiUser, loadToken, setToken } from "@/src/api";
+import { api, ApiUser, clearToken, loadToken, setToken } from "@/src/api";
 
 // ---------------------------------------------------------------------------
 // Teleconi Tracker — faithful mockup of Telecony_Ops_Tracker_Draft29.html
@@ -149,7 +149,7 @@ function Toast({ text }: { text: string | null }) {
   const insets = useSafeAreaInsets();
   if (!text) return null;
   return (
-    <View pointerEvents="none" style={[styles.toastWrap, { bottom: insets.bottom + 96 }]}>
+    <View style={[styles.toastWrap, { bottom: insets.bottom + 96, pointerEvents: "none" }]}>
       <View style={styles.toast}>
         <Ionicons name="checkmark-circle" size={18} color="#7CE0AE" />
         <Text style={styles.toastText}>{text}</Text>
@@ -229,56 +229,63 @@ function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
 // Dashboard
 // ---------------------------------------------------------------------------
 
-const TREND = [
-  { m: "Jan", h: 30 }, { m: "Feb", h: 38 }, { m: "Mar", h: 46 }, { m: "Apr", h: 40 },
-  { m: "May", h: 58 }, { m: "Jun", h: 65 }, { m: "Jul", h: 76 }, { m: "Aug", h: 100 },
-];
-const COST_BY_USER = [
-  { name: "Yendro Makendro Sija", role: "Engineer", amt: "Rp18,2M" },
-  { name: "Rofinus Hada", role: "Engineer", amt: "Rp15,4M" },
-  { name: "Pahala Sidauruk", role: "PM", amt: "Rp12,8M" },
-  { name: "Aldi Efendi", role: "Engineer", amt: "Rp11,7M" },
-  { name: "Teleconi", role: "Owner", amt: "Rp9,8M" },
-];
-const COST_BY_CATEGORY = [
-  { name: "Transport", desc: "Travel & local transportation", pct: 42 },
-  { name: "Penginapan", desc: "Hotel / accommodation", pct: 31 },
-  { name: "Makan", desc: "Meals", pct: 21 },
-  { name: "Others", desc: "Other operational cost", pct: 6 },
-];
+const fmtM = (n: number) => {
+  const r = Math.round((n / 1_000_000) * 10) / 10;
+  return `Rp${String(r).replace(".", ",")}M`;
+};
+const fmtFull = (n: number) => `Rp ${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+
+const postIcon = (post: string): keyof typeof Ionicons.glyphMap => {
+  if (!post) return "cash-outline";
+  if (post.startsWith("3")) return "bed-outline";
+  if (post.startsWith("4")) return "car-outline";
+  if (post.startsWith("5")) return "construct-outline";
+  if (post.startsWith("6")) return "document-text-outline";
+  return "cash-outline";
+};
+
+function Loading() {
+  return <Card style={{ alignItems: "center", paddingVertical: 40 }}><ActivityIndicator color={C.blue} /></Card>;
+}
 
 function Dashboard() {
-  const [project, setProject] = useState("All Project");
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    (async () => {
+      try { setData(await api.dashboard()); } catch { /* ignore */ } finally { setLoading(false); }
+    })();
+  }, []);
+
+  if (loading || !data) return <Loading />;
+  const remainingBudget = data.total_budget - data.total_actual;
+  const trendMax = Math.max(...data.trend.map((t: any) => t.total), 1);
+
   return (
     <>
-      <Card style={styles.filterCard}>
-        <Label>Project</Label>
-        <Select testID="dashboard-project-filter" value={project} options={["All Project", "Moratel DWDM", "Moratel OLT"]} onSelect={setProject} />
-      </Card>
-
       <Card style={styles.heroCard}>
         <Muted style={{ color: "#C7D6EA" }}>Project Profitability</Muted>
         <View style={styles.profitGrid}>
           <View style={styles.profitItem}>
             <Text style={styles.profitLabel}>Total Profit</Text>
-            <Text testID="dashboard-total-profit" style={styles.profitValue}>Rp 564,6M</Text>
+            <Text testID="dashboard-total-profit" style={styles.profitValue}>{fmtM(data.total_profit)}</Text>
             <Text style={styles.profitSub}>PO Value − Actual Cost</Text>
           </View>
           <View style={styles.profitItem}>
             <Text style={styles.profitLabel}>Profit Margin</Text>
-            <Text style={styles.profitValue}>75,3%</Text>
+            <Text style={styles.profitValue}>{String(data.profit_margin).replace(".", ",")}%</Text>
             <Text style={styles.profitSub}>Profit ÷ PO Value</Text>
           </View>
         </View>
-        <Muted style={{ color: "#C7D6EA", marginTop: 6 }}>{project === "All Project" ? "All projects" : project}</Muted>
+        <Muted style={{ color: "#C7D6EA", marginTop: 6 }}>All projects</Muted>
       </Card>
 
       <View style={styles.statGrid}>
         {[
-          { label: "PO Value", value: "Rp 750M", note: "Nilai project dari customer" },
-          { label: "Cost Budget", value: "Rp 320M", note: "Budget internal operational" },
-          { label: "Actual Cost", value: "Rp 185,4M", note: "Pengeluaran aktual" },
-          { label: "Remaining Cost Budget", value: "Rp 134,6M", note: "Budget − Actual Cost" },
+          { label: "PO Value", value: fmtM(data.total_po), note: "Nilai project dari customer" },
+          { label: "Cost Budget", value: fmtM(data.total_budget), note: "Budget internal operational" },
+          { label: "Actual Cost", value: fmtM(data.total_actual), note: "Pengeluaran aktual" },
+          { label: "Remaining Cost Budget", value: fmtM(remainingBudget), note: "Budget − Actual Cost" },
         ].map((s) => (
           <Card key={s.label} style={styles.statCard}>
             <Muted>{s.label}</Muted>
@@ -291,10 +298,10 @@ function Dashboard() {
       <Card>
         <View style={styles.rowBetween}>
           <Text style={styles.h2}>Budget Utilization</Text>
-          <Text style={styles.h2}>72%</Text>
+          <Text style={styles.h2}>{String(data.budget_utilization).replace(".", ",")}%</Text>
         </View>
-        <BarTrack pct={72} />
-        <Muted>Actual Rp185,4M / Budget Rp257,0M</Muted>
+        <BarTrack pct={Math.min(data.budget_utilization, 100)} />
+        <Muted>Actual {fmtM(data.total_actual)} / Budget {fmtM(data.total_budget)}</Muted>
       </Card>
 
       <Card>
@@ -304,16 +311,13 @@ function Dashboard() {
             <Text key={h} style={[styles.finHeadCell, i === 0 && styles.finCellFirst]}>{h}</Text>
           ))}
         </View>
-        {[
-          ["Moratel DWDM", "Rp450M", "Rp190M", "Rp115,2M", "Rp74,8M"],
-          ["Moratel OLT", "Rp300M", "Rp130M", "Rp70,2M", "Rp59,8M"],
-        ].map((r) => (
-          <View key={r[0]} style={styles.finRow}>
-            <Text style={[styles.finCell, styles.finCellFirst, styles.finProject]}>{r[0]}</Text>
-            <Text style={styles.finCell}>{r[1]}</Text>
-            <Text style={styles.finCell}>{r[2]}</Text>
-            <Text style={styles.finCell}>{r[3]}</Text>
-            <Text style={[styles.finCell, styles.finRemaining]}>{r[4]}</Text>
+        {data.summary.map((r: any) => (
+          <View key={r.project_name} style={styles.finRow}>
+            <Text style={[styles.finCell, styles.finCellFirst, styles.finProject]}>{r.project_name}</Text>
+            <Text style={styles.finCell}>{fmtM(r.po_amount)}</Text>
+            <Text style={styles.finCell}>{fmtM(r.budget)}</Text>
+            <Text style={styles.finCell}>{fmtM(r.actual_cost)}</Text>
+            <Text style={[styles.finCell, styles.finRemaining]}>{fmtM(r.remaining)}</Text>
           </View>
         ))}
       </Card>
@@ -321,24 +325,26 @@ function Dashboard() {
       <Card>
         <Text style={styles.h2}>Monthly Cost Trend</Text>
         <View style={styles.chart}>
-          {TREND.map((b) => (
-            <View key={b.m} style={styles.barCol}>
+          {data.trend.map((b: any) => (
+            <View key={b.month} style={styles.barCol}>
               <View style={styles.barArea}>
-                <View style={[styles.bar, { height: `${b.h}%` }]} />
+                <View style={[styles.bar, { height: `${Math.max((b.total / trendMax) * 100, 2)}%` }]} />
               </View>
-              <Text style={styles.barLabel}>{b.m}</Text>
+              <Text style={styles.barLabel}>{b.label}</Text>
             </View>
           ))}
         </View>
-        <Muted>Highest: August • Rp28,6M</Muted>
+        <Muted>Highest: {data.peak_month.label} • {fmtM(data.peak_month.total)}</Muted>
       </Card>
 
       <Card>
         <Text style={styles.h2}>Cost by Project</Text>
-        <View style={styles.rowBetween}><Text style={styles.rowMain}>Moratel DWDM</Text><Text style={styles.strong}>62%</Text></View>
-        <BarTrack pct={62} />
-        <View style={[styles.rowBetween, { marginTop: 8 }]}><Text style={styles.rowMain}>Moratel OLT</Text><Text style={styles.strong}>38%</Text></View>
-        <BarTrack pct={38} />
+        {data.cost_by_project.length === 0 ? <Muted>Belum ada data</Muted> : data.cost_by_project.map((c: any) => (
+          <View key={c.name}>
+            <View style={styles.rowBetween}><Text style={styles.rowMain}>{c.name}</Text><Text style={styles.strong}>{c.pct}%</Text></View>
+            <BarTrack pct={c.pct} />
+          </View>
+        ))}
       </Card>
 
       <Card>
@@ -346,20 +352,20 @@ function Dashboard() {
           <Text style={styles.h2}>Cost by User</Text>
           <Muted>Top 5</Muted>
         </View>
-        {COST_BY_USER.map((u) => (
+        {data.cost_by_user.map((u: any) => (
           <View key={u.name} style={styles.listRow}>
             <View><Text style={styles.rowMain}>{u.name}</Text><Muted>{u.role}</Muted></View>
-            <Text style={styles.strong}>{u.amt}</Text>
+            <Text style={styles.strong}>{fmtM(u.total)}</Text>
           </View>
         ))}
       </Card>
 
       <Card>
         <Text style={styles.h2}>Cost by Category</Text>
-        {COST_BY_CATEGORY.map((c) => (
+        {data.cost_by_category.map((c: any) => (
           <View key={c.name}>
             <View style={styles.listRow}>
-              <View style={{ flex: 1 }}><Text style={styles.rowMain}>{c.name}</Text><Muted>{c.desc}</Muted></View>
+              <View style={{ flex: 1 }}><Text style={styles.rowMain}>{c.name}</Text></View>
               <Text style={styles.strong}>{c.pct}%</Text>
             </View>
             <BarTrack pct={c.pct} />
@@ -374,22 +380,32 @@ function Dashboard() {
 // PO & Invoice
 // ---------------------------------------------------------------------------
 
-const POS = [
-  { no: "PO-2026-001", project: "Moratel DWDM • Bank Mandiri", amount: "Rp 450.000.000", actual: "Rp 115.200.000", remaining: "Rp 334.800.000", util: "25,6%" },
-  { no: "PO-2026-002", project: "Moratel OLT • Bali", amount: "Rp 300.000.000", actual: "Rp 70.200.000", remaining: "Rp 229.800.000", util: "23,4%" },
-];
-
-const INVOICES = [
-  { no: "INV-2026-001", meta: "PO-2026-001 • Rp 225.000.000 • Due 25 Aug 2026", paid: true },
-  { no: "INV-2026-002", meta: "PO-2026-001 • Rp 225.000.000 • Due 10 Sep 2026", paid: false },
-  { no: "INV-2026-003", meta: "PO-2026-002 • Rp 150.000.000 • Due 30 Aug 2026", paid: true },
-  { no: "INV-2026-004", meta: "PO-2026-002 • Rp 150.000.000 • Due 15 Sep 2026", paid: false },
-];
-
 function POInvoice({ toast }: { toast: (t: string) => void }) {
+  const [pos, setPos] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [invoices, setInvoices] = useState(INVOICES);
-  const toggleInv = (i: number) => setInvoices((s) => s.map((inv, n) => (n === i ? { ...inv, paid: !inv.paid } : inv)));
+
+  const load = async () => {
+    try {
+      const p = await api.pos();
+      setPos(p.pos);
+      const inv = await api.invoices();
+      setInvoices(inv.invoices);
+    } catch (e: any) {
+      toast(e?.message || "Gagal memuat data");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleInv = async (num: string) => {
+    try { await api.toggleInvoice(num); await load(); } catch (e: any) { toast(e?.message || "Gagal"); }
+  };
+
+  const projectNames = Array.from(new Set(pos.map((p) => p.project_name)));
+
   return (
     <>
       <Text style={styles.screenTitle}>PO & Invoice</Text>
@@ -398,52 +414,76 @@ function POInvoice({ toast }: { toast: (t: string) => void }) {
           <Pressable testID="po-add-button" onPress={() => setShowAdd(true)} style={({ pressed }) => [styles.primaryBtn, styles.flex1, pressed && styles.pressed]}>
             <Text style={styles.primaryBtnText}>+ Add PO</Text>
           </Pressable>
-          <Pressable testID="po-search-button" onPress={() => toast("Search PO")} style={({ pressed }) => [styles.secondaryBtn, styles.flex1, pressed && styles.pressed]}>
-            <Text style={styles.secondaryBtnText}>Search</Text>
-          </Pressable>
         </View>
       </Card>
 
-      {POS.map((po) => (
-        <Card key={po.no}>
-          <View style={styles.listRow}>
-            <View><Text style={styles.strong}>{po.no}</Text><Muted>{po.project}</Muted></View>
-            <View style={styles.badgeApproved}><Text style={styles.badgeApprovedText}>Active</Text></View>
-          </View>
-          <View style={styles.poStatRow}>
-            <View><Muted>PO Amount</Muted><Text style={styles.strong}>{po.amount}</Text></View>
-            <View style={{ alignItems: "flex-end" }}><Muted>Actual Cost</Muted><Text style={styles.strong}>{po.actual}</Text></View>
-          </View>
-          <View style={styles.poStatRow}>
-            <View><Muted>Remaining PO</Muted><Text style={styles.strong}>{po.remaining}</Text></View>
-            <View style={{ alignItems: "flex-end" }}><Muted>Cost Utilization</Muted><Text style={styles.strong}>{po.util}</Text></View>
-          </View>
-        </Card>
-      ))}
+      {loading ? <Loading /> : pos.map((po) => {
+        const remaining = po.po_amount - po.actual_cost;
+        return (
+          <Card key={po.po_number}>
+            <View style={styles.listRow}>
+              <View><Text style={styles.strong}>{po.po_number}</Text><Muted>{po.project_name} • {po.location}</Muted></View>
+              <View style={styles.badgeApproved}><Text style={styles.badgeApprovedText}>{po.status}</Text></View>
+            </View>
+            <View style={styles.poStatRow}>
+              <View><Muted>PO Amount</Muted><Text style={styles.strong}>{fmtFull(po.po_amount)}</Text></View>
+              <View style={{ alignItems: "flex-end" }}><Muted>Actual Cost</Muted><Text style={styles.strong}>{fmtFull(po.actual_cost)}</Text></View>
+            </View>
+            <View style={styles.poStatRow}>
+              <View><Muted>Remaining PO</Muted><Text style={styles.strong}>{fmtFull(remaining)}</Text></View>
+              <View style={{ alignItems: "flex-end" }}><Muted>Cost Utilization</Muted><Text style={styles.strong}>{String(po.utilization).replace(".", ",")}%</Text></View>
+            </View>
+          </Card>
+        );
+      })}
 
       <Card>
         <Text style={styles.h2}>Invoice Status</Text>
         {invoices.map((inv, i) => (
-          <View key={inv.no} style={styles.listRow}>
+          <View key={inv.invoice_number} style={styles.listRow}>
             <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.rowMain}>{inv.no}</Text>
-              <Muted>{inv.meta}</Muted>
+              <Text style={styles.rowMain}>{inv.invoice_number}</Text>
+              <Muted>{inv.po_number} • {fmtFull(inv.amount)} • Due {inv.due_date}</Muted>
             </View>
-            <StatusPill testID={`invoice-status-${i}`} paid={inv.paid} onPress={() => toggleInv(i)} />
+            <StatusPill testID={`invoice-status-${i}`} paid={inv.paid} onPress={() => toggleInv(inv.invoice_number)} />
           </View>
         ))}
       </Card>
 
-      <AddPOModal visible={showAdd} onClose={() => setShowAdd(false)} onSave={() => { setShowAdd(false); toast("PO berhasil ditambahkan"); }} />
+      <AddPOModal
+        visible={showAdd}
+        projects={projectNames.length ? projectNames : ["Moratel DWDM", "Moratel OLT"]}
+        onClose={() => setShowAdd(false)}
+        onCreated={async () => { setShowAdd(false); await load(); toast("PO berhasil ditambahkan"); }}
+      />
     </>
   );
 }
 
-function AddPOModal({ visible, onClose, onSave }: { visible: boolean; onClose: () => void; onSave: () => void }) {
+function AddPOModal({ visible, projects, onClose, onCreated }: { visible: boolean; projects: string[]; onClose: () => void; onCreated: () => void }) {
   const insets = useSafeAreaInsets();
   const [no, setNo] = useState("");
-  const [project, setProject] = useState("Moratel DWDM");
+  const [project, setProject] = useState(projects[0]);
+  const [location, setLocation] = useState("");
   const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (!no.trim() || !amount.trim()) { setErr("PO Number dan PO Amount wajib diisi."); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      await api.createPO({ po_number: no.trim(), project_name: project, location: location || "-", po_amount: Number(amount) });
+      setNo(""); setLocation(""); setAmount("");
+      onCreated();
+    } catch (e: any) {
+      setErr(e?.message || "Gagal menambah PO.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -459,12 +499,16 @@ function AddPOModal({ visible, onClose, onSave }: { visible: boolean; onClose: (
             <Input testID="po-number-input" value={no} onChangeText={setNo} placeholder="PO-2026-003" />
             <View style={{ height: 12 }} />
             <Label>Project</Label>
-            <Select value={project} options={["Moratel DWDM", "Moratel OLT"]} onSelect={setProject} testID="po-project-select" />
+            <Select value={project} options={projects} onSelect={setProject} testID="po-project-select" />
+            <View style={{ height: 12 }} />
+            <Label>Location</Label>
+            <Input testID="po-location-input" value={location} onChangeText={setLocation} placeholder="Lokasi project" />
             <View style={{ height: 12 }} />
             <Label>PO Amount</Label>
-            <Input testID="po-amount-input" value={amount} onChangeText={setAmount} placeholder="Rp 0" keyboardType="numeric" />
-            <Pressable testID="po-save-button" onPress={onSave} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
-              <Text style={styles.primaryBtnText}>Save PO</Text>
+            <Input testID="po-amount-input" value={amount} onChangeText={setAmount} placeholder="0" keyboardType="numeric" />
+            {err ? <Text style={styles.errorText}>{err}</Text> : null}
+            <Pressable testID="po-save-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
+              {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Save PO</Text>}
             </Pressable>
           </KeyboardAwareScrollView>
         </View>
@@ -487,15 +531,11 @@ const POST_CATEGORIES: Record<string, string[]> = {
 };
 const POSTS = Object.keys(POST_CATEGORIES);
 
-const TRANSACTIONS = [
-  { title: "Fuel — Bank Mandiri", meta: "14 Aug 2026 • 2.1 Fuel", amt: "Rp450K", icon: "car-outline" as const },
-  { title: "Toll — site visit", meta: "12 Aug 2026 • 2.2 Toll", amt: "Rp120K", icon: "card-outline" as const },
-  { title: "Hotel — crew", meta: "09 Aug 2026 • 3.1 Hotel", amt: "Rp2,8M", icon: "bed-outline" as const },
-];
-
 function SubmitOps({ toast }: { toast: (t: string) => void }) {
+  const [projects, setProjects] = useState<string[]>(["Moratel DWDM", "Moratel OLT"]);
+  const [txns, setTxns] = useState<any[]>([]);
   const [date, setDate] = useState("2026-08-14");
-  const [project, setProject] = useState("DWDM");
+  const [project, setProject] = useState("Moratel DWDM");
   const [site, setSite] = useState("Bank Mandiri - Jakarta");
   const [post, setPost] = useState(POSTS[0]);
   const [category, setCategory] = useState(POST_CATEGORIES[POSTS[0]][0]);
@@ -503,19 +543,35 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
   const [ket, setKet] = useState("");
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const onPost = (p: string) => {
-    setPost(p);
-    setCategory(POST_CATEGORIES[p][0]);
+  const load = async () => {
+    try {
+      const p = await api.pos();
+      if (p.pos.length) { setProjects(Array.from(new Set(p.pos.map((x) => x.project_name)))); setProject(p.pos[0].project_name); }
+      const c = await api.costs();
+      setTxns(c.costs.slice(0, 10));
+    } catch { /* ignore */ }
   };
-  const submit = () => {
-    if (!remarks.trim()) {
-      setError("Remarks wajib diisi sebelum submit.");
-      return;
-    }
+  useEffect(() => { load(); }, []);
+
+  const onPost = (p: string) => { setPost(p); setCategory(POST_CATEGORIES[p][0]); };
+
+  const submit = async () => {
+    if (!remarks.trim()) { setError("Remarks wajib diisi sebelum submit."); return; }
+    if (!amount.trim() || isNaN(Number(amount))) { setError("Amount harus berupa angka."); return; }
+    setSaving(true);
     setError("");
-    setRemarks("");
-    toast("Cost berhasil disubmit");
+    try {
+      await api.createCost({ date, project_name: project, site_name: site, post, category, amount: Number(amount), keterangan: ket, remarks });
+      setRemarks(""); setKet("");
+      await load();
+      toast("Cost berhasil disubmit");
+    } catch (e: any) {
+      setError(e?.message || "Gagal submit cost.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -526,7 +582,7 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
         <Input testID="op-date-input" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
         <View style={{ height: 12 }} />
         <Label>Project</Label>
-        <Select value={project} options={["DWDM", "OLT"]} onSelect={setProject} testID="op-project-select" />
+        <Select value={project} options={projects} onSelect={setProject} testID="op-project-select" />
         <View style={{ height: 12 }} />
         <Label>Site Name</Label>
         <Input testID="op-site-input" value={site} onChangeText={setSite} />
@@ -562,21 +618,21 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
           style={[styles.input, styles.textarea]}
         />
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        <Pressable testID="op-submit-button" onPress={submit} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
-          <Text style={styles.primaryBtnText}>Submit Cost</Text>
+        <Pressable testID="op-submit-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
+          {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Submit Cost</Text>}
         </Pressable>
       </Card>
 
       <Card>
         <Text style={styles.h2}>Transaction History</Text>
-        {TRANSACTIONS.map((t) => (
-          <View key={t.title} style={styles.listRow}>
-            <View style={styles.txIcon}><Ionicons name={t.icon} size={18} color={C.blue} /></View>
+        {txns.length === 0 ? <Muted>Belum ada transaksi</Muted> : txns.map((t) => (
+          <View key={t.id} style={styles.listRow}>
+            <View style={styles.txIcon}><Ionicons name={postIcon(t.post)} size={18} color={C.blue} /></View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.rowMain}>{t.title}</Text>
-              <Muted>{t.meta}</Muted>
+              <Text style={styles.rowMain}>{t.category}</Text>
+              <Muted>{t.date} • {t.project_name}</Muted>
             </View>
-            <Text style={styles.strong}>{t.amt}</Text>
+            <Text style={styles.strong}>{fmtFull(t.amount)}</Text>
           </View>
         ))}
       </Card>
@@ -882,6 +938,12 @@ function ChangePassword({ toast, onDone }: { toast: (t: string) => void; onDone:
 // Root
 // ---------------------------------------------------------------------------
 
+const allowedScreens = (role: string): Screen[] => {
+  if (role === "Owner") return ["dashboard", "po", "operational", "users"];
+  if (role === "PM" || role === "Project Manager" || role === "Project Controller") return ["po", "operational"];
+  return ["operational"]; // Engineer + fallback
+};
+
 export default function Index() {
   const insets = useSafeAreaInsets();
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
@@ -901,13 +963,21 @@ export default function Index() {
     } catch { /* ignore */ }
   };
 
+  const logout = async () => {
+    await clearToken();
+    setCurrentUser(null);
+    setScreen("dashboard");
+  };
+
   useEffect(() => {
     (async () => {
       const t = await loadToken();
       if (t) {
         try {
           const me = await api.me();
-          setCurrentUser(fromApi(me));
+          const u = fromApi(me);
+          setCurrentUser(u);
+          setScreen(allowedScreens(u.role)[0]);
         } catch { /* token invalid */ }
       }
       setBooting(false);
@@ -920,7 +990,7 @@ export default function Index() {
       case "po": return <POInvoice toast={showToast} />;
       case "operational": return <SubmitOps toast={showToast} />;
       case "users": return <EmployeeManagement toast={showToast} user={currentUser!} refreshUser={refreshUser} />;
-      case "password": return <ChangePassword toast={showToast} onDone={() => setScreen("users")} />;
+      case "password": return <ChangePassword toast={showToast} onDone={() => setScreen(allowedScreens(currentUser!.role)[0])} />;
     }
   }, [screen, currentUser]);
 
@@ -932,15 +1002,16 @@ export default function Index() {
     );
   }
 
-  if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); setScreen("dashboard"); }} />;
+  if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); setScreen(allowedScreens(u.role)[0]); }} />;
 
+  const tabs = TABS.filter((t) => allowedScreens(currentUser.role).includes(t.id));
   const showBack = screen === "password";
 
   return (
     <View style={styles.app}>
       <View style={[styles.appBar, { paddingTop: insets.top + 8 }]}>
         {showBack ? (
-          <Pressable testID="appbar-back" onPress={() => setScreen("users")} hitSlop={10} style={styles.appBarSide}>
+          <Pressable testID="appbar-back" onPress={() => setScreen(allowedScreens(currentUser.role)[0])} hitSlop={10} style={styles.appBarSide}>
             <Ionicons name="chevron-back" size={24} color={C.text} />
           </Pressable>
         ) : (
@@ -952,9 +1023,14 @@ export default function Index() {
             </View>
           </View>
         )}
-        <Pressable testID="appbar-password" onPress={() => setScreen("password")} hitSlop={10} style={styles.appBarSide}>
-          <Ionicons name="settings-outline" size={23} color={screen === "password" ? C.blue : C.text} />
-        </Pressable>
+        <View style={styles.appBarActions}>
+          <Pressable testID="appbar-password" onPress={() => setScreen("password")} hitSlop={10} style={styles.appBarSide}>
+            <Ionicons name="settings-outline" size={22} color={screen === "password" ? C.blue : C.text} />
+          </Pressable>
+          <Pressable testID="appbar-logout" onPress={logout} hitSlop={10} style={styles.appBarSide}>
+            <Ionicons name="log-out-outline" size={23} color={C.red} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -968,8 +1044,8 @@ export default function Index() {
       </ScrollView>
 
       <View style={[styles.nav, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}>
-        {TABS.map((t) => {
-          const active = screen === t.id || (screen === "password" && t.id === "users");
+        {tabs.map((t) => {
+          const active = screen === t.id || (screen === "password" && t.id === tabs[0]?.id);
           return (
             <Pressable key={t.id} testID={`tab-${t.id}`} onPress={() => setScreen(t.id)} style={styles.navItem}>
               <Ionicons name={t.icon} size={22} color={active ? C.blue : C.muted} />
@@ -999,6 +1075,7 @@ const styles = StyleSheet.create({
   appBarUserName: { fontSize: 14.5, fontWeight: "800", color: C.text, letterSpacing: -0.2 },
   appBarUserRole: { fontSize: 11.5, fontWeight: "700", color: C.blue, marginTop: 1 },
   appBarSide: { minWidth: 32, minHeight: 32, alignItems: "center", justifyContent: "center" },
+  appBarActions: { flexDirection: "row", alignItems: "center", gap: 6 },
 
   card: { backgroundColor: C.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.line },
   muted: { color: C.muted, fontSize: 12.5, lineHeight: 18 },
