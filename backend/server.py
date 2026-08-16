@@ -308,11 +308,11 @@ app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], 
 
 # ---- seed ----
 DEMO_USERS = [
-    {"employee_id": "00101", "name": "Teleconi", "role": "Owner", "password": "123", "email": "owner@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "Mandiri", "no_rek": "123", "salary_amount": 20_000_000},
-    {"employee_id": "00201", "name": "Pahala Sidauruk", "role": "PM", "password": "123", "email": "pahala@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7151611471", "salary_amount": 12_000_000},
-    {"employee_id": "00202", "name": "Yendro Makendro Sija", "role": "Engineer", "password": "123", "email": "yendro@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "Mandiri", "no_rek": "7151611471", "salary_amount": 8_500_000},
-    {"employee_id": "00203", "name": "Rofinus Hada", "role": "Engineer", "password": "123", "email": "rofinus@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7795330801", "salary_amount": 8_000_000},
-    {"employee_id": "00204", "name": "Aldi Efendi", "role": "Engineer", "password": "123", "email": "aldi@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7535113980", "salary_amount": 8_000_000},
+    {"employee_id": "00101", "name": "Teleconi", "role": "Owner", "password": "123", "email": "owner@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "Mandiri", "no_rek": "123", "salary_amount": 0},
+    {"employee_id": "00201", "name": "Pahala Sidauruk", "role": "PM", "password": "123", "email": "pahala@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7151611471", "salary_amount": 0},
+    {"employee_id": "00202", "name": "Yendro Makendro Sija", "role": "Engineer", "password": "123", "email": "yendro@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "Mandiri", "no_rek": "7151611471", "salary_amount": 0},
+    {"employee_id": "00203", "name": "Rofinus Hada", "role": "Engineer", "password": "123", "email": "rofinus@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7795330801", "salary_amount": 0},
+    {"employee_id": "00204", "name": "Aldi Efendi", "role": "Engineer", "password": "123", "email": "aldi@teleconi.id", "ktp": "tbd", "join_date": "01 Aug 2026", "bpjs": "tbd", "address": "jakarta", "gaji": "tbd", "bank": "BCA", "no_rek": "7535113980", "salary_amount": 0},
 ]
 
 DEMO_POS = [

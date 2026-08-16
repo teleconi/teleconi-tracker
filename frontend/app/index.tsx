@@ -47,17 +47,17 @@ const DEMO_ACCOUNTS = [
   { role: "Engineer", cred: "00202 / 123" },
 ];
 
-type Account = { name: string; role: string; password: string; email: string; bank: string; noRek: string; joinDate: string; salary: string };
+type Account = { name: string; role: string; password: string; ktp: string; bpjs: string; address: string; gaji: string; bank: string; noRek: string; joinDate: string };
 type SessionUser = Account & { employeeId: string };
 
 const DEFAULT_PASSWORD = "123";
 
 const USERS: Record<string, Account> = {
-  "00101": { name: "Teleconi", role: "Owner", password: DEFAULT_PASSWORD, email: "owner@teleconi.id", bank: "Mandiri", noRek: "123", joinDate: "2026-08-01", salary: "20000000" },
-  "00201": { name: "Pahala Sidauruk", role: "PM", password: DEFAULT_PASSWORD, email: "pahala@teleconi.id", bank: "BCA", noRek: "7151611471", joinDate: "2026-08-01", salary: "12000000" },
-  "00202": { name: "Yendro Makendro Sija", role: "Engineer", password: DEFAULT_PASSWORD, email: "yendro@teleconi.id", bank: "Mandiri", noRek: "7151611471", joinDate: "2026-08-01", salary: "8500000" },
-  "00203": { name: "Rofinus Hada", role: "Engineer", password: DEFAULT_PASSWORD, email: "rofinus@teleconi.id", bank: "BCA", noRek: "7795330801", joinDate: "2026-08-01", salary: "8000000" },
-  "00204": { name: "Aldi Efendi", role: "Engineer", password: DEFAULT_PASSWORD, email: "aldi@teleconi.id", bank: "BCA", noRek: "7535113980", joinDate: "2026-08-01", salary: "8000000" },
+  "00101": { name: "Teleconi", role: "Owner", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "Mandiri", noRek: "123", joinDate: "2026-08-01" },
+  "00201": { name: "Pahala Sidauruk", role: "PM", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7151611471", joinDate: "2026-08-01" },
+  "00202": { name: "Yendro Makendro Sija", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "Mandiri", noRek: "7151611471", joinDate: "2026-08-01" },
+  "00203": { name: "Rofinus Hada", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7795330801", joinDate: "2026-08-01" },
+  "00204": { name: "Aldi Efendi", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7535113980", joinDate: "2026-08-01" },
 };
 
 const initials = (name: string) => name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -575,26 +575,32 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
 // ---------------------------------------------------------------------------
 
 const EMPLOYEES = [
-  { name: "Teleconi", meta: "00101 • Owner", amt: "Rp20M" },
-  { name: "Pahala Sidauruk", meta: "00201 • PM", amt: "Rp12M" },
-  { name: "Yendro Makendro Sija", meta: "00202 • Engineer", amt: "Rp8.5M" },
-  { name: "Rofinus Hada", meta: "00203 • Engineer", amt: "Rp8M" },
-  { name: "Aldi Efendi", meta: "00204 • Engineer", amt: "Rp8M" },
+  { name: "Teleconi", meta: "00101 • Owner", amt: "tbd" },
+  { name: "Pahala Sidauruk", meta: "00201 • PM", amt: "tbd" },
+  { name: "Yendro Makendro Sija", meta: "00202 • Engineer", amt: "tbd" },
+  { name: "Rofinus Hada", meta: "00203 • Engineer", amt: "tbd" },
+  { name: "Aldi Efendi", meta: "00204 • Engineer", amt: "tbd" },
 ];
 const SALARY_ROWS = [
-  { name: "Teleconi", month: "Aug-26", amount: "20M", paid: true },
-  { name: "Pahala Sidauruk", month: "Aug-26", amount: "12M", paid: false },
-  { name: "Yendro Makendro Sija", month: "Aug-26", amount: "8.5M", paid: false },
-  { name: "Rofinus Hada", month: "Aug-26", amount: "8M", paid: true },
-  { name: "Aldi Efendi", month: "Aug-26", amount: "8M", paid: false },
+  { name: "Teleconi", month: "Aug-26", amount: "tbd", paid: true },
+  { name: "Pahala Sidauruk", month: "Aug-26", amount: "tbd", paid: false },
+  { name: "Yendro Makendro Sija", month: "Aug-26", amount: "tbd", paid: false },
+  { name: "Rofinus Hada", month: "Aug-26", amount: "tbd", paid: true },
+  { name: "Aldi Efendi", month: "Aug-26", amount: "tbd", paid: false },
 ];
 
 function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user: SessionUser }) {
-  const [address, setAddress] = useState("Depok, Jawa Barat");
-  const [email, setEmail] = useState(user.email);
-  const [salary, setSalary] = useState(user.salary);
+  const isOwner = user.role === "Owner";
+  const [address, setAddress] = useState(user.address);
+  const [ktp, setKtp] = useState(user.ktp);
+  const [bpjs, setBpjs] = useState(user.bpjs);
+  const [gaji, setGaji] = useState(user.gaji);
   const [rows, setRows] = useState(SALARY_ROWS);
-  const toggle = (i: number) => setRows((r) => r.map((row, n) => (n === i ? { ...row, paid: !row.paid } : row)));
+  const toggle = (i: number) => {
+    if (!isOwner) return toast("Hanya Owner yang dapat mengubah data");
+    setRows((r) => r.map((row, n) => (n === i ? { ...row, paid: !row.paid } : row)));
+  };
+  const ownerOnly = (fn: () => void) => () => (isOwner ? fn() : toast("Hanya Owner yang dapat mengubah data"));
 
   return (
     <>
@@ -607,25 +613,42 @@ function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user:
         <View style={styles.avatar}><Text style={styles.avatarText}>{initials(user.name)}</Text></View>
         <View><Text style={styles.strong}>{user.name}</Text><Muted>ID {user.employeeId} • {user.role}</Muted></View>
       </Card>
-      <View style={styles.notice}>
-        <Text style={styles.noticeText}>Email Address dan Alamat Rumah dapat diubah oleh user. Data identitas lainnya hanya dapat diubah oleh Owner.</Text>
+      <View style={[styles.notice, isOwner ? styles.noticeOwner : null]}>
+        <Text style={[styles.noticeText, isOwner ? styles.noticeOwnerText : null]}>
+          {isOwner
+            ? "Anda login sebagai Owner. Semua data karyawan dapat diubah."
+            : "Semua informasi hanya dapat diubah oleh Owner. Data di bawah bersifat read-only."}
+        </Text>
       </View>
 
       <Card>
         <Label>Nama Lengkap</Label>
         <Input value={user.name} readOnly />
         <View style={{ height: 12 }} />
+        <Label>No. KTP</Label>
+        <Input testID="user-ktp-input" value={ktp} onChangeText={setKtp} readOnly={!isOwner} />
+        <View style={{ height: 12 }} />
+        <Label>No. BPJS Kesehatan</Label>
+        <Input testID="user-bpjs-input" value={bpjs} onChangeText={setBpjs} readOnly={!isOwner} />
+        <View style={{ height: 12 }} />
+        <Label>Alamat Rumah</Label>
+        <TextInput
+          testID="user-address-input"
+          value={address}
+          onChangeText={setAddress}
+          editable={isOwner}
+          multiline
+          style={[styles.input, styles.textarea, !isOwner && styles.inputReadonly]}
+        />
+        <View style={{ height: 12 }} />
+        <Label>Gaji Bulanan</Label>
+        <Input testID="user-salary-input" value={gaji} onChangeText={setGaji} readOnly={!isOwner} />
+        <View style={{ height: 12 }} />
         <Label>Bank</Label>
         <Input value={user.bank} readOnly />
         <View style={{ height: 12 }} />
         <Label>No. Rekening</Label>
         <Input value={user.noRek} readOnly />
-        <View style={{ height: 12 }} />
-        <Label>Alamat Rumah</Label>
-        <TextInput testID="user-address-input" value={address} onChangeText={setAddress} multiline style={[styles.input, styles.textarea]} />
-        <View style={{ height: 12 }} />
-        <Label>Email</Label>
-        <Input testID="user-email-input" value={email} onChangeText={setEmail} keyboardType="email-address" />
         <View style={{ height: 12 }} />
         <Label>Join Date</Label>
         <Input value={user.joinDate} readOnly />
@@ -635,24 +658,25 @@ function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user:
           <Text style={[styles.selectText, { color: C.muted }]}>{user.role}</Text>
           <Ionicons name="lock-closed" size={14} color={C.muted} />
         </View>
-        <View style={{ height: 12 }} />
-        <Label>Gaji Bulanan</Label>
-        <Input testID="user-salary-input" value={salary} onChangeText={setSalary} keyboardType="numeric" />
-        <Pressable testID="user-save-button" onPress={() => toast("Profil tersimpan")} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
-          <Text style={styles.primaryBtnText}>Save Profile</Text>
-        </Pressable>
+        {isOwner && (
+          <Pressable testID="user-save-button" onPress={() => toast("Profil tersimpan")} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
+            <Text style={styles.primaryBtnText}>Save Profile</Text>
+          </Pressable>
+        )}
       </Card>
 
       <Card>
         <Text style={styles.h2}>Employee List</Text>
-        <View style={styles.btnRow}>
-          <Pressable testID="employee-add-button" onPress={() => toast("Add employee")} style={({ pressed }) => [styles.primaryBtn, styles.flex1, pressed && styles.pressed]}>
-            <Text style={styles.primaryBtnText}>+ Add Employee</Text>
-          </Pressable>
-          <Pressable testID="employee-search-button" onPress={() => toast("Search employee")} style={({ pressed }) => [styles.secondaryBtn, styles.flex1, pressed && styles.pressed]}>
-            <Text style={styles.secondaryBtnText}>Search</Text>
-          </Pressable>
-        </View>
+        {isOwner && (
+          <View style={styles.btnRow}>
+            <Pressable testID="employee-add-button" onPress={ownerOnly(() => toast("Add employee"))} style={({ pressed }) => [styles.primaryBtn, styles.flex1, pressed && styles.pressed]}>
+              <Text style={styles.primaryBtnText}>+ Add Employee</Text>
+            </Pressable>
+            <Pressable testID="employee-search-button" onPress={() => toast("Search employee")} style={({ pressed }) => [styles.secondaryBtn, styles.flex1, pressed && styles.pressed]}>
+              <Text style={styles.secondaryBtnText}>Search</Text>
+            </Pressable>
+          </View>
+        )}
         {EMPLOYEES.map((e, i) => (
           <Pressable key={e.name} testID={`employee-row-${i}`} onPress={() => toast(`Dipilih: ${e.name}`)} style={styles.listRow}>
             <View><Text style={styles.rowMain}>{e.name}</Text><Muted>{e.meta}</Muted></View>
@@ -664,7 +688,7 @@ function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user:
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <View style={{ padding: 16, paddingBottom: 8 }}>
           <Text style={styles.h2}>Salary Status</Text>
-          <Muted>Status pembayaran gaji karyawan untuk periode Aug-26. Pilih status untuk memperbaruinya.</Muted>
+          <Muted>{isOwner ? "Status pembayaran gaji periode Aug-26. Pilih status untuk memperbaruinya." : "Status pembayaran gaji periode Aug-26 (read-only)."}</Muted>
         </View>
         <View style={styles.tableHead}>
           <Text style={[styles.tableHeadCell, { flex: 2 }]}>Employee</Text>
@@ -903,6 +927,8 @@ const styles = StyleSheet.create({
   avatarText: { color: C.white, fontWeight: "800", fontSize: 15 },
   notice: { backgroundColor: "#FFF7E6", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#FBE7B8" },
   noticeText: { color: "#8A6A1F", fontSize: 12.5, lineHeight: 18 },
+  noticeOwner: { backgroundColor: "#E7F7EF", borderColor: "#BCEBD3" },
+  noticeOwnerText: { color: "#0A7A47" },
 
   tableHead: { flexDirection: "row", backgroundColor: "#F7FAFD", paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line },
   tableHeadCell: { fontSize: 10.5, fontWeight: "800", color: C.muted, textTransform: "uppercase", letterSpacing: 0.3 },
