@@ -1,0 +1,116 @@
+{
+  "app_name": "Telecony Ops Tracker",
+  "app_type": "mobile_web_app",
+  "archetype": "ARCHETYPE 4: SWISS & HIGH-CONTRAST (Authority, Clarity, Truth) & Mobile-First Operations",
+  "typography": {
+    "headings": {
+      "family": "System Sans / SF Pro Display",
+      "weights": ["600", "700"],
+      "sizes": {
+        "h1": "text-2xl sm:text-3xl",
+        "h2": "text-xl sm:text-2xl",
+        "h3": "text-lg",
+        "h4": "text-base"
+      }
+    },
+    "body": {
+      "family": "System Sans / Inter",
+      "weights": ["400", "500"],
+      "sizes": {
+        "base": "text-sm",
+        "small": "text-xs"
+      }
+    }
+  },
+  "colors": {
+    "primary": "#0F172A",
+    "primary_accent": "#0284C7",
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "text": "#0F172A",
+    "text_muted": "#64748B",
+    "border": "#E2E8F0",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#EF4444"
+  },
+  "visual_enhancers": {
+    "shadows": "shadow-sm sm:shadow-md",
+    "radius": "rounded-xl",
+    "border_style": "border border-slate-200"
+  },
+  "screens": [
+    {
+      "id": "login",
+      "name": "Login Screen",
+      "description": "Authentication screen with employee ID / username, password, and quick-fill demo account buttons (Owner, Engineer, PM, PCM)."
+    },
+    {
+      "id": "dashboard",
+      "name": "Dashboard & Financial Summary",
+      "description": "Project profitability metrics, PO value vs actual cost, cost budget utilization, project financial summary table, monthly cost trends, cost by project, user, and category."
+    },
+    {
+      "id": "po_projects",
+      "name": "PO Project Management",
+      "description": "List of active POs (Moratel DWDM, Moratel OLT), PO amounts, actual costs, cost utilization percentages, and add PO action."
+    },
+    {
+      "id": "operational_tracker",
+      "name": "Operational Cost Tracker",
+      "description": "Form for submitting daily operational expenses categorized by Makan, Penginapan, Transport, Others, with amount and keterangan."
+    },
+    {
+      "id": "approvals",
+      "name": "Approvals & Transactions",
+      "description": "Transaction history and PM approval queue for operational costs submitted by engineers and PCMs."
+    },
+    {
+      "id": "user_management",
+      "name": "User Profile & Management",
+      "description": "Employee profile details, role-based editing (Owner vs Employee), salary details, and password change."
+    },
+    {
+      "id": "employee_list",
+      "name": "Employee List & Salary Payment",
+      "description": "Directory of staff (Budi, Citra, Deni, Eka) with monthly salary status tracking (Belum Dibayar / Terbayar toggle)."
+    }
+  ],
+  "navigation": {
+    "type": "bottom_navigation_bar",
+    "tabs": [
+      { "id": "dashboard", "label": "Dashboard", "icon": "Home" },
+      { "id": "po", "label": "PO Project", "icon": "Folder" },
+      { "id": "operational", "label": "Operational", "icon": "PlusCircle" },
+      { "id": "gaji", "label": "Salary/Gaji", "icon": "DollarSign" },
+      { "id": "profile", "label": "Profile", "icon": "User" }
+    ]
+  },
+  "image_urls": [
+    {
+      "category": "telecom_network",
+      "url": "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHx0ZWxlY29tJTIwbmV0d29yayUyMGVuZ2luZWVyaW5nJTIwZmliZXIlMjBvcHRpYyUyMG9wZXJhdGlvbnN8ZW58MHx8fHwxNzg2ODc5ODc1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Network rack and UTP patch cables for telecommunications operations"
+    },
+    {
+      "category": "fiber_optic",
+      "url": "https://images.unsplash.com/photo-1683322499436-f4383dd59f5a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwyfHx0ZWxlY29tJTIwbmV0d29yayUyMGVuZ2luZWVyaW5nJTIwZmliZXIlMjBvcHRpYyUyMG9wZXJhdGlvbnN8ZW58MHx8fHwxNzg2ODc5ODc1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Close up fiber optic and network connectivity switches"
+    }
+  ],
+  "accessibility": {
+    "requirements": [
+      "All interactive elements must include data-testid attributes",
+      "Minimum touch target size 44x44px",
+      "High contrast text for data clarity"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Recreate the complete mockup flow and screens represented by the Telecony Ops Tracker HTML artifact.",
+    "Ensure bottom navigation bar switches seamlessly between Dashboard, PO Projects, Operational Tracker, Salary/Gaji, and Profile/User Management.",
+    "Include demo account quick-fill buttons on the login screen for Owner, Engineer, PM, and PCM.",
+    "Implement operational cost submission form with category pills (Makan, Penginapan, Transport, Others).",
+    "Provide salary payment status toggle (Belum / Terbayar) and project financial summary tables.",
+    "Add data-testid to all buttons, tabs, inputs, and list items."
+  ]
+}

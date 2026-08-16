@@ -1,0 +1,63 @@
+{
+  "summary": "Frontend smoke test at 390x844: login/dashboard, metrics, navigation, overflow, and initial UI rendering passed. PO modal save becomes outside viewport after form input, blocking completion; subsequent flows were not claimed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Add purchase order modal",
+        "issue": "After filling modal fields on a 390x844 viewport, Save PO is rendered outside the viewport and Playwright cannot tap it, even with force=True. Modal appears to close/shift while keyboard/focus is active. Reproduced twice.",
+        "testID": "button-save-po",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "PO creation",
+        "issue": "Save action could not be completed from the mobile web flow because the save control was outside the viewport after input.",
+        "affected_testIDs": [
+          "button-add-po",
+          "input-PO Number",
+          "input-Project",
+          "input-PO Amount",
+          "button-save-po"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Add purchase order modal",
+        "issues": [
+          "Keyboard/input focus causes the bottom-sheet action to be inaccessible at 390x844; ensure modal content/action scrolls into view and keyboard dismissal is handled."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/frontend/app/index.tsx"
+  ],
+  "action_items": [
+    "Fix Add PO modal keyboard/viewport handling so Save PO remains reachable after filling fields on 390x844; retest PO creation and then remaining Operational, Salary, and Profile flows.",
+    "Consider controlled state and validation for Add PO fields; current save is a local alert-only action."
+  ],
+  "critical_code_review_comments": [
+    "The requested prototype flows are implemented locally in index.tsx, but PO save, operational submit, password save, notifications, and sign-out are alert/local state actions rather than persisted integrations.",
+    "The Field helper assigns testIDs from labels, but repeated labels such as Project produce duplicate testIDs across screens; scope selectors by screen/modal for robust automation.",
+    "Login accepts any non-empty credentials and maps all non-owner users to Budi; demo credentials are quick-fill only and are not validated."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_1.json"
+  ],
+  "success_rate": {
+    "backend": "not tested (frontend-only request)",
+    "frontend": "approximately 60% of executed checks passed; PO flow blocked and remaining dependent checks not claimed"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Owner credentials read from /app/memory/test_credentials.md. Login, dashboard metrics, horizontal overflow, and navigation to PO were verified. PO modal save failed twice after input at 390x844 due to outside-viewport interaction. Do not claim unexecuted remaining flows.",
+  "rca_of_issue": "Reproduction: login with demo-Owner, open PO Project, Add PO, fill PO Number/Project/PO Amount, tap Save PO. At 390x844 the modal action is below the visible/scrollable area after input focus; Playwright reports Element is outside of the viewport, including force=True. Likely missing keyboard avoidance or modal ScrollView/action positioning in the bottom sheet."
+}
