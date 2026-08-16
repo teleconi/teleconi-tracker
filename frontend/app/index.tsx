@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+
+import { api, ApiUser, loadToken, setToken } from "@/src/api";
 
 // ---------------------------------------------------------------------------
 // Teleconi Tracker — faithful mockup of Telecony_Ops_Tracker_Draft29.html
@@ -47,20 +50,25 @@ const DEMO_ACCOUNTS = [
   { role: "Engineer", cred: "00202 / 123" },
 ];
 
-type Account = { name: string; role: string; password: string; ktp: string; bpjs: string; address: string; gaji: string; bank: string; noRek: string; joinDate: string };
-type SessionUser = Account & { employeeId: string };
-
-const DEFAULT_PASSWORD = "123";
-
-const USERS: Record<string, Account> = {
-  "00101": { name: "Teleconi", role: "Owner", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "Mandiri", noRek: "123", joinDate: "2026-08-01" },
-  "00201": { name: "Pahala Sidauruk", role: "PM", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7151611471", joinDate: "2026-08-01" },
-  "00202": { name: "Yendro Makendro Sija", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "Mandiri", noRek: "7151611471", joinDate: "2026-08-01" },
-  "00203": { name: "Rofinus Hada", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7795330801", joinDate: "2026-08-01" },
-  "00204": { name: "Aldi Efendi", role: "Engineer", password: DEFAULT_PASSWORD, ktp: "tbd", bpjs: "tbd", address: "jakarta", gaji: "tbd", bank: "BCA", noRek: "7535113980", joinDate: "2026-08-01" },
+type SessionUser = {
+  employeeId: string;
+  name: string;
+  role: string;
+  ktp: string;
+  bpjs: string;
+  address: string;
+  gaji: string;
+  bank: string;
+  noRek: string;
+  joinDate: string;
 };
 
-const initials = (name: string) => name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+const fromApi = (u: ApiUser): SessionUser => ({
+  employeeId: u.employee_id, name: u.name, role: u.role, ktp: u.ktp, bpjs: u.bpjs,
+  address: u.address, gaji: u.gaji, bank: u.bank, noRek: u.no_rek, joinDate: u.join_date,
+});
+
+const initials = (name: string) => name.trim().split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
 // ---------------------------------------------------------------------------
 // Reusable primitives
@@ -159,20 +167,26 @@ function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     const id = user.trim();
     if (!id || !pass) {
       setError("Masukkan Username / Employee ID dan Password.");
       return;
     }
-    const found = USERS[id];
-    if (!found || found.password !== pass) {
-      setError("Employee ID atau Password salah.");
-      return;
-    }
+    setLoading(true);
     setError("");
-    onLogin({ employeeId: id, ...found });
+    try {
+      const { access_token } = await api.login(id, pass);
+      await setToken(access_token);
+      const me = await api.me();
+      onLogin(fromApi(me));
+    } catch (e: any) {
+      setError(e?.message || "Employee ID atau Password salah.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -194,8 +208,8 @@ function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
         <Label>Password</Label>
         <Input testID="login-pass-input" value={pass} onChangeText={setPass} placeholder="Password" secureTextEntry />
         {error ? <Text testID="login-error" style={styles.errorText}>{error}</Text> : null}
-        <Pressable testID="login-button" onPress={submit} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
-          <Text style={styles.primaryBtnText}>Login</Text>
+        <Pressable testID="login-button" onPress={submit} disabled={loading} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, loading && { opacity: 0.7 }, pressed && styles.pressed]}>
+          {loading ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Login</Text>}
         </Pressable>
 
         <View style={styles.demoBox}>
@@ -574,115 +588,164 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
 // Employee Management (profile + employee list + salary status)
 // ---------------------------------------------------------------------------
 
-const EMPLOYEES = [
-  { name: "Teleconi", meta: "00101 • Owner", amt: "tbd" },
-  { name: "Pahala Sidauruk", meta: "00201 • PM", amt: "tbd" },
-  { name: "Yendro Makendro Sija", meta: "00202 • Engineer", amt: "tbd" },
-  { name: "Rofinus Hada", meta: "00203 • Engineer", amt: "tbd" },
-  { name: "Aldi Efendi", meta: "00204 • Engineer", amt: "tbd" },
-];
-const SALARY_ROWS = [
-  { name: "Teleconi", month: "Aug-26", amount: "tbd", paid: true },
-  { name: "Pahala Sidauruk", month: "Aug-26", amount: "tbd", paid: false },
-  { name: "Yendro Makendro Sija", month: "Aug-26", amount: "tbd", paid: false },
-  { name: "Rofinus Hada", month: "Aug-26", amount: "tbd", paid: true },
-  { name: "Aldi Efendi", month: "Aug-26", amount: "tbd", paid: false },
-];
-
-function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user: SessionUser }) {
+function EmployeeManagement({ toast, user, refreshUser }: { toast: (t: string) => void; user: SessionUser; refreshUser: () => void }) {
   const isOwner = user.role === "Owner";
-  const [address, setAddress] = useState(user.address);
-  const [ktp, setKtp] = useState(user.ktp);
-  const [bpjs, setBpjs] = useState(user.bpjs);
-  const [gaji, setGaji] = useState(user.gaji);
-  const [rows, setRows] = useState(SALARY_ROWS);
-  const toggle = (i: number) => {
-    if (!isOwner) return toast("Hanya Owner yang dapat mengubah data");
-    setRows((r) => r.map((row, n) => (n === i ? { ...row, paid: !row.paid } : row)));
+  const [employees, setEmployees] = useState<ApiUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(user.employeeId);
+  const [form, setForm] = useState({ ktp: "", bpjs: "", address: "", gaji: "", bank: "", noRek: "" });
+  const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const load = async () => {
+    try {
+      const data = await api.employees();
+      setEmployees(data.employees);
+    } catch (e: any) {
+      toast(e?.message || "Gagal memuat data");
+    } finally {
+      setLoading(false);
+    }
   };
-  const ownerOnly = (fn: () => void) => () => (isOwner ? fn() : toast("Hanya Owner yang dapat mengubah data"));
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selected = employees.find((e) => e.employee_id === selectedId);
+  useEffect(() => {
+    if (selected) setForm({ ktp: selected.ktp, bpjs: selected.bpjs, address: selected.address, gaji: selected.gaji, bank: selected.bank, noRek: selected.no_rek });
+  }, [selectedId, employees.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await api.updateEmployee(selected.employee_id, {
+        name: selected.name, role: selected.role, join_date: selected.join_date,
+        ktp: form.ktp, bpjs: form.bpjs, address: form.address, gaji: form.gaji, bank: form.bank, no_rek: form.noRek,
+      });
+      await load();
+      if (selected.employee_id === user.employeeId) refreshUser();
+      toast("Profil tersimpan");
+    } catch (e: any) {
+      toast(e?.message || "Gagal menyimpan");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (eid: string) => {
+    if (!isOwner) return toast("Hanya Owner yang dapat mengubah data");
+    try {
+      await api.toggleSalary(eid);
+      await load();
+    } catch (e: any) {
+      toast(e?.message || "Gagal mengubah status");
+    }
+  };
+
+  const createEmployee = async (payload: any) => {
+    await api.createEmployee(payload);
+    await load();
+    setAddOpen(false);
+    toast("Karyawan berhasil ditambahkan");
+  };
+
+  const headName = selected?.name ?? user.name;
+  const headRole = selected?.role ?? user.role;
 
   return (
     <>
       <Text style={styles.screenTitle}>Employee Management</Text>
       <View style={styles.notice}>
-        <Text style={styles.noticeText}>Pilih karyawan pada daftar untuk melihat detail profil dan jumlah gajinya.</Text>
+        <Text style={styles.noticeText}>
+          {isOwner ? "Pilih karyawan pada daftar untuk melihat & mengubah detail profilnya." : "Pilih karyawan pada daftar untuk melihat detail profil dan jumlah gajinya."}
+        </Text>
       </View>
 
       <Card style={styles.profileCard}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(user.name)}</Text></View>
-        <View><Text style={styles.strong}>{user.name}</Text><Muted>ID {user.employeeId} • {user.role}</Muted></View>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(headName)}</Text></View>
+        <View><Text style={styles.strong}>{headName}</Text><Muted>ID {selected?.employee_id ?? user.employeeId} • {headRole}</Muted></View>
       </Card>
       <View style={[styles.notice, isOwner ? styles.noticeOwner : null]}>
         <Text style={[styles.noticeText, isOwner ? styles.noticeOwnerText : null]}>
           {isOwner
-            ? "Anda login sebagai Owner. Semua data karyawan dapat diubah."
+            ? "Anda login sebagai Owner. Semua data karyawan dapat diubah dan disimpan."
             : "Semua informasi hanya dapat diubah oleh Owner. Data di bawah bersifat read-only."}
         </Text>
       </View>
 
-      <Card>
-        <Label>Nama Lengkap</Label>
-        <Input value={user.name} readOnly />
-        <View style={{ height: 12 }} />
-        <Label>No. KTP</Label>
-        <Input testID="user-ktp-input" value={ktp} onChangeText={setKtp} readOnly={!isOwner} />
-        <View style={{ height: 12 }} />
-        <Label>No. BPJS Kesehatan</Label>
-        <Input testID="user-bpjs-input" value={bpjs} onChangeText={setBpjs} readOnly={!isOwner} />
-        <View style={{ height: 12 }} />
-        <Label>Alamat Rumah</Label>
-        <TextInput
-          testID="user-address-input"
-          value={address}
-          onChangeText={setAddress}
-          editable={isOwner}
-          multiline
-          style={[styles.input, styles.textarea, !isOwner && styles.inputReadonly]}
-        />
-        <View style={{ height: 12 }} />
-        <Label>Gaji Bulanan</Label>
-        <Input testID="user-salary-input" value={gaji} onChangeText={setGaji} readOnly={!isOwner} />
-        <View style={{ height: 12 }} />
-        <Label>Bank</Label>
-        <Input value={user.bank} readOnly />
-        <View style={{ height: 12 }} />
-        <Label>No. Rekening</Label>
-        <Input value={user.noRek} readOnly />
-        <View style={{ height: 12 }} />
-        <Label>Join Date</Label>
-        <Input value={user.joinDate} readOnly />
-        <View style={{ height: 12 }} />
-        <Label>Role</Label>
-        <View style={styles.selectDisabled}>
-          <Text style={[styles.selectText, { color: C.muted }]}>{user.role}</Text>
-          <Ionicons name="lock-closed" size={14} color={C.muted} />
-        </View>
-        {isOwner && (
-          <Pressable testID="user-save-button" onPress={() => toast("Profil tersimpan")} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, pressed && styles.pressed]}>
-            <Text style={styles.primaryBtnText}>Save Profile</Text>
-          </Pressable>
-        )}
-      </Card>
+      {loading ? (
+        <Card style={{ alignItems: "center", paddingVertical: 32 }}><ActivityIndicator color={C.blue} /></Card>
+      ) : (
+        <Card>
+          <Label>Nama Lengkap</Label>
+          <Input value={selected?.name ?? ""} readOnly />
+          <View style={{ height: 12 }} />
+          <Label>No. KTP</Label>
+          <Input testID="user-ktp-input" value={form.ktp} onChangeText={set("ktp")} readOnly={!isOwner} />
+          <View style={{ height: 12 }} />
+          <Label>No. BPJS Kesehatan</Label>
+          <Input testID="user-bpjs-input" value={form.bpjs} onChangeText={set("bpjs")} readOnly={!isOwner} />
+          <View style={{ height: 12 }} />
+          <Label>Alamat Rumah</Label>
+          <TextInput
+            testID="user-address-input"
+            value={form.address}
+            onChangeText={set("address")}
+            editable={isOwner}
+            multiline
+            style={[styles.input, styles.textarea, !isOwner && styles.inputReadonly]}
+          />
+          <View style={{ height: 12 }} />
+          <Label>Gaji Bulanan</Label>
+          <Input testID="user-salary-input" value={form.gaji} onChangeText={set("gaji")} readOnly={!isOwner} />
+          <View style={{ height: 12 }} />
+          <Label>Bank</Label>
+          <Input testID="user-bank-input" value={form.bank} onChangeText={set("bank")} readOnly={!isOwner} />
+          <View style={{ height: 12 }} />
+          <Label>No. Rekening</Label>
+          <Input testID="user-norek-input" value={form.noRek} onChangeText={set("noRek")} readOnly={!isOwner} />
+          <View style={{ height: 12 }} />
+          <Label>Join Date</Label>
+          <Input value={selected?.join_date ?? ""} readOnly />
+          <View style={{ height: 12 }} />
+          <Label>Role</Label>
+          <View style={styles.selectDisabled}>
+            <Text style={[styles.selectText, { color: C.muted }]}>{selected?.role ?? ""}</Text>
+            <Ionicons name="lock-closed" size={14} color={C.muted} />
+          </View>
+          {isOwner && (
+            <Pressable testID="user-save-button" onPress={save} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 18 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
+              {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Save Profile</Text>}
+            </Pressable>
+          )}
+        </Card>
+      )}
 
       <Card>
         <Text style={styles.h2}>Employee List</Text>
         {isOwner && (
           <View style={styles.btnRow}>
-            <Pressable testID="employee-add-button" onPress={ownerOnly(() => toast("Add employee"))} style={({ pressed }) => [styles.primaryBtn, styles.flex1, pressed && styles.pressed]}>
+            <Pressable testID="employee-add-button" onPress={() => setAddOpen(true)} style={({ pressed }) => [styles.primaryBtn, styles.flex1, pressed && styles.pressed]}>
               <Text style={styles.primaryBtnText}>+ Add Employee</Text>
-            </Pressable>
-            <Pressable testID="employee-search-button" onPress={() => toast("Search employee")} style={({ pressed }) => [styles.secondaryBtn, styles.flex1, pressed && styles.pressed]}>
-              <Text style={styles.secondaryBtnText}>Search</Text>
             </Pressable>
           </View>
         )}
-        {EMPLOYEES.map((e, i) => (
-          <Pressable key={e.name} testID={`employee-row-${i}`} onPress={() => toast(`Dipilih: ${e.name}`)} style={styles.listRow}>
-            <View><Text style={styles.rowMain}>{e.name}</Text><Muted>{e.meta}</Muted></View>
-            <View style={styles.badge}><Text style={styles.badgeText}>{e.amt}</Text></View>
-          </Pressable>
-        ))}
+        {employees.map((e, i) => {
+          const active = e.employee_id === selectedId;
+          return (
+            <Pressable
+              key={e.employee_id}
+              testID={`employee-row-${i}`}
+              onPress={() => (isOwner ? setSelectedId(e.employee_id) : toast("Hanya Owner yang dapat mengubah data"))}
+              style={[styles.listRow, active && styles.listRowActive]}
+            >
+              <View><Text style={styles.rowMain}>{e.name}</Text><Muted>{e.employee_id} • {e.role}</Muted></View>
+              <View style={styles.badge}><Text style={styles.badgeText}>{e.gaji}</Text></View>
+            </Pressable>
+          );
+        })}
       </Card>
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
@@ -692,22 +755,89 @@ function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user:
         </View>
         <View style={styles.tableHead}>
           <Text style={[styles.tableHeadCell, { flex: 2 }]}>Employee</Text>
-          <Text style={[styles.tableHeadCell, { flex: 1 }]}>Month</Text>
           <Text style={[styles.tableHeadCell, { flex: 1 }]}>Amount</Text>
           <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "right" }]}>Status</Text>
         </View>
-        {rows.map((row, i) => (
-          <View key={row.name} style={styles.tableRow}>
-            <Text style={[styles.tableCell, { flex: 2, fontWeight: "700", color: C.text }]}>{row.name}</Text>
-            <Text style={[styles.tableCell, { flex: 1 }]}>{row.month}</Text>
-            <Text style={[styles.tableCell, { flex: 1 }]}>{row.amount}</Text>
+        {employees.map((e, i) => (
+          <View key={e.employee_id} style={styles.tableRow}>
+            <Text style={[styles.tableCell, { flex: 2, fontWeight: "700", color: C.text }]}>{e.name}</Text>
+            <Text style={[styles.tableCell, { flex: 1 }]}>{e.gaji}</Text>
             <View style={{ flex: 1.2, alignItems: "flex-end" }}>
-              <StatusPill testID={`salary-status-${i}`} paid={row.paid} onPress={() => toggle(i)} />
+              <StatusPill testID={`salary-status-${i}`} paid={!!e.paid} onPress={() => toggle(e.employee_id)} />
             </View>
           </View>
         ))}
       </Card>
+
+      <AddEmployeeModal visible={addOpen} onClose={() => setAddOpen(false)} onCreate={createEmployee} />
     </>
+  );
+}
+
+function AddEmployeeModal({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (p: any) => Promise<void> }) {
+  const insets = useSafeAreaInsets();
+  const [f, setF] = useState({ employee_id: "", name: "", role: "Engineer", gaji: "tbd", bank: "", no_rek: "", join_date: "2026-08-01" });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+
+  const submit = async () => {
+    if (!f.employee_id.trim() || !f.name.trim()) {
+      setErr("Employee ID dan Nama wajib diisi.");
+      return;
+    }
+    setSaving(true);
+    setErr("");
+    try {
+      await onCreate({ ...f, ktp: "tbd", bpjs: "tbd", address: "", password: "123" });
+      setF({ employee_id: "", name: "", role: "Engineer", gaji: "tbd", bank: "", no_rek: "", join_date: "2026-08-01" });
+    } catch (e: any) {
+      setErr(e?.message || "Gagal menambah karyawan.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.h2}>Add Employee</Text>
+            <Pressable testID="employee-modal-close" onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={24} color={C.text} />
+            </Pressable>
+          </View>
+          <KeyboardAwareScrollView bottomOffset={24} showsVerticalScrollIndicator={false}>
+            <Label>Employee ID</Label>
+            <Input testID="add-emp-id-input" value={f.employee_id} onChangeText={set("employee_id")} placeholder="Contoh: 00205" />
+            <View style={{ height: 12 }} />
+            <Label>Nama Lengkap</Label>
+            <Input testID="add-emp-name-input" value={f.name} onChangeText={set("name")} placeholder="Nama karyawan" />
+            <View style={{ height: 12 }} />
+            <Label>Role</Label>
+            <Select value={f.role} options={["Engineer", "PM", "Project Manager", "Project Controller", "Owner"]} onSelect={set("role")} testID="add-emp-role-select" />
+            <View style={{ height: 12 }} />
+            <Label>Gaji Bulanan</Label>
+            <Input testID="add-emp-gaji-input" value={f.gaji} onChangeText={set("gaji")} />
+            <View style={{ height: 12 }} />
+            <Label>Bank</Label>
+            <Input testID="add-emp-bank-input" value={f.bank} onChangeText={set("bank")} placeholder="BCA / Mandiri" />
+            <View style={{ height: 12 }} />
+            <Label>No. Rekening</Label>
+            <Input testID="add-emp-norek-input" value={f.no_rek} onChangeText={set("no_rek")} keyboardType="numeric" />
+            <View style={{ height: 12 }} />
+            <Label>Join Date</Label>
+            <Input testID="add-emp-join-input" value={f.join_date} onChangeText={set("join_date")} placeholder="YYYY-MM-DD" />
+            <Text style={styles.helperText}>Password default untuk karyawan baru: 123</Text>
+            {err ? <Text style={styles.errorText}>{err}</Text> : null}
+            <Pressable testID="add-emp-save-button" onPress={submit} disabled={saving} style={({ pressed }) => [styles.primaryBtn, { marginTop: 14 }, saving && { opacity: 0.7 }, pressed && styles.pressed]}>
+              {saving ? <ActivityIndicator color={C.white} /> : <Text style={styles.primaryBtnText}>Save Employee</Text>}
+            </Pressable>
+          </KeyboardAwareScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -755,6 +885,7 @@ function ChangePassword({ toast, onDone }: { toast: (t: string) => void; onDone:
 export default function Index() {
   const insets = useSafeAreaInsets();
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
+  const [booting, setBooting] = useState(true);
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [toastText, setToastText] = useState<string | null>(null);
 
@@ -763,15 +894,43 @@ export default function Index() {
     setTimeout(() => setToastText(null), 1800);
   };
 
+  const refreshUser = async () => {
+    try {
+      const me = await api.me();
+      setCurrentUser(fromApi(me));
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const t = await loadToken();
+      if (t) {
+        try {
+          const me = await api.me();
+          setCurrentUser(fromApi(me));
+        } catch { /* token invalid */ }
+      }
+      setBooting(false);
+    })();
+  }, []);
+
   const content = useMemo(() => {
     switch (screen) {
       case "dashboard": return <Dashboard />;
       case "po": return <POInvoice toast={showToast} />;
       case "operational": return <SubmitOps toast={showToast} />;
-      case "users": return <EmployeeManagement toast={showToast} user={currentUser!} />;
+      case "users": return <EmployeeManagement toast={showToast} user={currentUser!} refreshUser={refreshUser} />;
       case "password": return <ChangePassword toast={showToast} onDone={() => setScreen("users")} />;
     }
   }, [screen, currentUser]);
+
+  if (booting) {
+    return (
+      <View style={[styles.app, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator color={C.blue} size="large" />
+      </View>
+    );
+  }
 
   if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); setScreen("dashboard"); }} />;
 
@@ -914,6 +1073,8 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 9.5, color: C.muted, marginTop: 6 },
 
   listRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  listRowActive: { backgroundColor: "#F5F9FF", borderRadius: 10, paddingHorizontal: 8, borderBottomColor: "transparent" },
+  helperText: { color: C.muted, fontSize: 11.5, marginTop: 12 },
   txIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: C.paleBlue, alignItems: "center", justifyContent: "center" },
 
   poStatRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, marginTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" },

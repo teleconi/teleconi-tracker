@@ -23,9 +23,13 @@ Build a mobile app (Android & iOS) exactly matching the HTML mockup
   Employee List (Andi/Budi/Citra/Deni), Salary Status table (toggle paid).
 
 ## Implemented (2026-08-16)
-- Full visual mockup replicating Draft29 exactly (all screens above).
-- Native equivalents: tap-to-open Select pickers, keyboard-aware Add PO modal,
-  Toast instead of Alert. testIDs on all interactive elements.
+- Full visual mockup replicating Draft29 exactly (all screens).
+- Users seeded from user-id.xlsx; default password `123`.
+- WIRED TO BACKEND (real): login (JWT, persisted token), GET /auth/me,
+  GET /employees, PATCH /employees/{id} (Save Profile), POST /employees (Add Employee).
+- Owner-only enforcement on server (require_owner → 403 for non-Owner) and in UI
+  (read-only fields, hidden Save/Add for non-Owner). Verified via curl + Playwright.
+- Salary status toggle wired to POST /salaries/toggle (Owner only).
 
 ## Backlog / Remaining
 - P0: Wire frontend to backend (auth + data), extend backend for invoices &

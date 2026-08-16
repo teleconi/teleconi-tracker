@@ -65,11 +65,30 @@ class PublicUser(BaseModel):
     employee_id: str
     name: str
     role: str
-    email: str
-    ktp: str
-    join_date: str
-    bpjs: str
-    salary_amount: float
+    ktp: str = ""
+    bpjs: str = ""
+    address: str = ""
+    gaji: str = ""
+    bank: str = ""
+    no_rek: str = ""
+    join_date: str = ""
+
+
+class EmployeeUpsert(BaseModel):
+    name: str
+    role: str
+    ktp: str = "tbd"
+    bpjs: str = "tbd"
+    address: str = ""
+    gaji: str = "tbd"
+    bank: str = ""
+    no_rek: str = ""
+    join_date: str = ""
+
+
+class EmployeeCreate(EmployeeUpsert):
+    employee_id: str
+    password: str = "123"
 
 
 class POCreate(BaseModel):
@@ -129,10 +148,16 @@ async def current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
 def to_public(user: dict) -> PublicUser:
     return PublicUser(
         employee_id=user["employee_id"], name=user["name"], role=user["role"],
-        email=user.get("email", ""), ktp=user.get("ktp", ""),
-        join_date=user.get("join_date", ""), bpjs=user.get("bpjs", "Active"),
-        salary_amount=user.get("salary_amount", 0),
+        ktp=str(user.get("ktp", "")), bpjs=str(user.get("bpjs", "")),
+        address=str(user.get("address", "")), gaji=str(user.get("gaji", "")),
+        bank=str(user.get("bank", "")), no_rek=str(user.get("no_rek", "")),
+        join_date=str(user.get("join_date", "")),
     )
+
+
+def require_owner(user: dict):
+    if user.get("role") != "Owner":
+        raise HTTPException(status_code=403, detail="Hanya Owner yang dapat mengubah data")
 
 
 # ---- auth routes ----
@@ -262,23 +287,53 @@ async def create_cost(body: CostCreate, user: Annotated[dict, Depends(current_us
     return doc
 
 
-# ---- salary ----
+# ---- employees ----
 @api.get("/employees")
 async def list_employees(user: Annotated[dict, Depends(current_user)]):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("employee_id", 1).to_list(1000)
     salaries = await db.salaries.find({"month": CURRENT_MONTH}, {"_id": 0}).to_list(1000)
     paid_map = {s["employee_id"]: s["paid"] for s in salaries}
     employees = []
-    total = 0
-    paid_count = 0
     for u in users:
-        paid = paid_map.get(u["employee_id"], False)
-        amt = u.get("salary_amount", 0)
-        total += amt
-        if paid:
-            paid_count += 1
-        employees.append({"employee_id": u["employee_id"], "name": u["name"], "role": u["role"], "salary_amount": amt, "paid": paid})
-    return {"employees": employees, "month": CURRENT_MONTH, "total_payroll": total, "paid_count": paid_count, "total_count": len(employees)}
+        pub = to_public(u).model_dump()
+        pub["paid"] = paid_map.get(u["employee_id"], False)
+        employees.append(pub)
+    return {"employees": employees, "month": CURRENT_MONTH, "total_count": len(employees)}
+
+
+@api.post("/employees", response_model=PublicUser, status_code=201)
+async def create_employee(body: EmployeeCreate, user: Annotated[dict, Depends(current_user)]):
+    require_owner(user)
+    eid = body.employee_id.strip()
+    if not eid or not body.name.strip():
+        raise HTTPException(status_code=400, detail="Employee ID dan Nama wajib diisi")
+    if await db.users.find_one({"employee_id": eid}):
+        raise HTTPException(status_code=400, detail="Employee ID sudah digunakan")
+    doc = body.model_dump()
+    doc.pop("password", None)
+    doc["employee_id"] = eid
+    doc["no_rek"] = str(body.no_rek)
+    doc["password_hash"] = hash_password(body.password or "123")
+    await db.users.insert_one(doc)
+    await db.salaries.update_one({"employee_id": eid, "month": CURRENT_MONTH}, {"$set": {"paid": False}}, upsert=True)
+    saved = await db.users.find_one({"employee_id": eid}, {"_id": 0})
+    return to_public(saved)
+
+
+@api.patch("/employees/{employee_id}", response_model=PublicUser)
+async def update_employee(employee_id: str, body: EmployeeUpsert, user: Annotated[dict, Depends(current_user)]):
+    require_owner(user)
+    existing = await db.users.find_one({"employee_id": employee_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Karyawan tidak ditemukan")
+    update = body.model_dump()
+    update["no_rek"] = str(body.no_rek)
+    await db.users.update_one({"employee_id": employee_id}, {"$set": update})
+    saved = await db.users.find_one({"employee_id": employee_id}, {"_id": 0})
+    return to_public(saved)
+
+
+# ---- salary ----
 
 
 @api.post("/salaries/toggle")
