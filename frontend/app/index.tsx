@@ -48,6 +48,18 @@ const DEMO_ACCOUNTS = [
   { role: "PCM", cred: "00203 / pcm123" },
 ];
 
+type Account = { name: string; role: string; password: string; email: string; ktp: string; bpjs: string; joinDate: string; salary: string };
+type SessionUser = Account & { employeeId: string };
+
+const USERS: Record<string, Account> = {
+  "00101": { name: "Andi Saputra", role: "Owner", password: "owner123", email: "andi@projectops.local", ktp: "3174********1234", bpjs: "0001********789", joinDate: "2018-04-02", salary: "15000000" },
+  "00201": { name: "Budi Santoso", role: "Engineer", password: "eng123", email: "budi@projectops.local", ktp: "3174********2201", bpjs: "0001********201", joinDate: "2020-03-10", salary: "8500000" },
+  "00202": { name: "Citra Lestari", role: "Project Manager", password: "pm123", email: "citra@projectops.local", ktp: "3174********2202", bpjs: "0001********202", joinDate: "2019-07-18", salary: "12000000" },
+  "00203": { name: "Deni Kurniawan", role: "Project Controller", password: "pcm123", email: "deni@projectops.local", ktp: "3174********2203", bpjs: "0001********203", joinDate: "2021-02-22", salary: "9500000" },
+};
+
+const initials = (name: string) => name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
 // ---------------------------------------------------------------------------
 // Reusable primitives
 // ---------------------------------------------------------------------------
@@ -140,19 +152,25 @@ function Toast({ text }: { text: string | null }) {
 // Login
 // ---------------------------------------------------------------------------
 
-function Login({ onLogin }: { onLogin: () => void }) {
+function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
 
   const submit = () => {
-    if (!user || !pass) {
+    const id = user.trim();
+    if (!id || !pass) {
       setError("Masukkan Username / Employee ID dan Password.");
       return;
     }
+    const found = USERS[id];
+    if (!found || found.password !== pass) {
+      setError("Employee ID atau Password salah.");
+      return;
+    }
     setError("");
-    onLogin();
+    onLogin({ employeeId: id, ...found });
   };
 
   return (
@@ -567,10 +585,10 @@ const SALARY_ROWS = [
   { name: "Deni Kurniawan", month: "Aug-26", amount: "9.5M", paid: true },
 ];
 
-function EmployeeManagement({ toast }: { toast: (t: string) => void }) {
+function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user: SessionUser }) {
   const [address, setAddress] = useState("Depok, Jawa Barat");
-  const [email, setEmail] = useState("andi@projectops.local");
-  const [salary, setSalary] = useState("15000000");
+  const [email, setEmail] = useState(user.email);
+  const [salary, setSalary] = useState(user.salary);
   const [rows, setRows] = useState(SALARY_ROWS);
   const toggle = (i: number) => setRows((r) => r.map((row, n) => (n === i ? { ...row, paid: !row.paid } : row)));
 
@@ -582,8 +600,8 @@ function EmployeeManagement({ toast }: { toast: (t: string) => void }) {
       </View>
 
       <Card style={styles.profileCard}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>AS</Text></View>
-        <View><Text style={styles.strong}>Andi Saputra</Text><Muted>ID 00101 • Owner</Muted></View>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(user.name)}</Text></View>
+        <View><Text style={styles.strong}>{user.name}</Text><Muted>ID {user.employeeId} • {user.role}</Muted></View>
       </Card>
       <View style={styles.notice}>
         <Text style={styles.noticeText}>Email Address dan Alamat Rumah dapat diubah oleh user. Data identitas lainnya hanya dapat diubah oleh Owner.</Text>
@@ -591,13 +609,13 @@ function EmployeeManagement({ toast }: { toast: (t: string) => void }) {
 
       <Card>
         <Label>Nama Lengkap</Label>
-        <Input value="Andi Saputra" readOnly />
+        <Input value={user.name} readOnly />
         <View style={{ height: 12 }} />
         <Label>No. KTP</Label>
-        <Input value="3174********1234" readOnly />
+        <Input value={user.ktp} readOnly />
         <View style={{ height: 12 }} />
         <Label>No. BPJS Kesehatan</Label>
-        <Input value="0001********789" readOnly />
+        <Input value={user.bpjs} readOnly />
         <View style={{ height: 12 }} />
         <Label>Alamat Rumah</Label>
         <TextInput testID="user-address-input" value={address} onChangeText={setAddress} multiline style={[styles.input, styles.textarea]} />
@@ -606,11 +624,11 @@ function EmployeeManagement({ toast }: { toast: (t: string) => void }) {
         <Input testID="user-email-input" value={email} onChangeText={setEmail} keyboardType="email-address" />
         <View style={{ height: 12 }} />
         <Label>Join Date</Label>
-        <Input value="2018-04-02" readOnly />
+        <Input value={user.joinDate} readOnly />
         <View style={{ height: 12 }} />
         <Label>Role</Label>
         <View style={styles.selectDisabled}>
-          <Text style={[styles.selectText, { color: C.muted }]}>Owner</Text>
+          <Text style={[styles.selectText, { color: C.muted }]}>{user.role}</Text>
           <Ionicons name="lock-closed" size={14} color={C.muted} />
         </View>
         <View style={{ height: 12 }} />
@@ -708,7 +726,7 @@ function ChangePassword({ toast, onDone }: { toast: (t: string) => void; onDone:
 
 export default function Index() {
   const insets = useSafeAreaInsets();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [toastText, setToastText] = useState<string | null>(null);
 
@@ -722,12 +740,12 @@ export default function Index() {
       case "dashboard": return <Dashboard />;
       case "po": return <POInvoice toast={showToast} />;
       case "operational": return <SubmitOps toast={showToast} />;
-      case "users": return <EmployeeManagement toast={showToast} />;
+      case "users": return <EmployeeManagement toast={showToast} user={currentUser!} />;
       case "password": return <ChangePassword toast={showToast} onDone={() => setScreen("users")} />;
     }
-  }, [screen]);
+  }, [screen, currentUser]);
 
-  if (!loggedIn) return <Login onLogin={() => { setLoggedIn(true); setScreen("dashboard"); }} />;
+  if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); setScreen("dashboard"); }} />;
 
   const showBack = screen === "password";
 
@@ -741,7 +759,10 @@ export default function Index() {
         ) : (
           <View style={styles.appBarBrand}>
             <View style={styles.appBarLogo}><Ionicons name="pulse" size={16} color={C.white} /></View>
-            <Text style={styles.appBarTitle}>Teleconi Tracker</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text testID="appbar-user-name" style={styles.appBarUserName} numberOfLines={1}>{currentUser.name}</Text>
+              <Text testID="appbar-user-role" style={styles.appBarUserRole} numberOfLines={1}>{currentUser.role}</Text>
+            </View>
           </View>
         )}
         <Pressable testID="appbar-password" onPress={() => setScreen("password")} hitSlop={10} style={styles.appBarSide}>
@@ -785,9 +806,11 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, gap: 14 },
 
   appBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, backgroundColor: C.white, borderBottomWidth: 1, borderBottomColor: C.line },
-  appBarBrand: { flexDirection: "row", alignItems: "center", gap: 9 },
-  appBarLogo: { width: 28, height: 28, borderRadius: 8, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" },
+  appBarBrand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 12 },
+  appBarLogo: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.blue, alignItems: "center", justifyContent: "center" },
   appBarTitle: { fontSize: 17, fontWeight: "800", color: C.text, letterSpacing: -0.3 },
+  appBarUserName: { fontSize: 14.5, fontWeight: "800", color: C.text, letterSpacing: -0.2 },
+  appBarUserRole: { fontSize: 11.5, fontWeight: "700", color: C.blue, marginTop: 1 },
   appBarSide: { minWidth: 32, minHeight: 32, alignItems: "center", justifyContent: "center" },
 
   card: { backgroundColor: C.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.line },
