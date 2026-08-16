@@ -83,4 +83,6 @@ export const api = {
   costs: (): Promise<{ costs: any[]; count: number }> => req("/costs"),
   createCost: (data: any): Promise<any> => req("/costs", { method: "POST", body: JSON.stringify(data) }),
   deleteCost: (id: string): Promise<null> => req(`/costs/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  reportUrl: (kind: string, fmt: string): string =>
+    `${BASE}/api/reports/${kind}?fmt=${encodeURIComponent(fmt)}&token=${encodeURIComponent(token || "")}`,
 };
