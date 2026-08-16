@@ -251,13 +251,34 @@ function Loading() {
 function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    (async () => {
-      try { setData(await api.dashboard()); } catch { /* ignore */ } finally { setLoading(false); }
-    })();
-  }, []);
+  const [options, setOptions] = useState<string[]>(["All Project"]);
+  const [project, setProject] = useState("All Project");
 
-  if (loading || !data) return <Loading />;
+  const fetchData = async (proj: string) => {
+    setLoading(true);
+    try {
+      const d = await api.dashboard(proj);
+      setData(d);
+      if (d.projects?.length) setOptions(["All Project", ...d.projects]);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+  useEffect(() => { fetchData("All Project"); }, []);
+
+  const onProject = (p: string) => { setProject(p); fetchData(p); };
+
+  return (
+    <>
+      <Card style={styles.filterCard}>
+        <Label>Project</Label>
+        <Select testID="dashboard-project-filter" value={project} options={options} onSelect={onProject} />
+      </Card>
+
+      {loading || !data ? <Loading /> : <DashboardBody data={data} project={project} />}
+    </>
+  );
+}
+
+function DashboardBody({ data, project }: { data: any; project: string }) {
   const remainingBudget = data.total_budget - data.total_actual;
   const trendMax = Math.max(...data.trend.map((t: any) => t.total), 1);
 
@@ -277,7 +298,7 @@ function Dashboard() {
             <Text style={styles.profitSub}>Profit ÷ PO Value</Text>
           </View>
         </View>
-        <Muted style={{ color: "#C7D6EA", marginTop: 6 }}>All projects</Muted>
+        <Muted style={{ color: "#C7D6EA", marginTop: 6 }}>{project === "All Project" ? "All projects" : project}</Muted>
       </Card>
 
       <View style={styles.statGrid}>

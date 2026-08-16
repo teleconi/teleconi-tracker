@@ -212,8 +212,12 @@ async def build_pos() -> List[dict]:
 
 # ---- dashboard ----
 @api.get("/dashboard")
-async def dashboard(user: Annotated[dict, Depends(current_user)]):
-    pos = await build_pos()
+async def dashboard(user: Annotated[dict, Depends(current_user)], project: Optional[str] = None):
+    all_pos = await build_pos()
+    selected = project if project and project != "All Project" else None
+    pos = [p for p in all_pos if (selected is None or p["project_name"] == selected)]
+    projects = [p["project_name"] for p in all_pos]
+
     total_po = sum(p["po_amount"] for p in pos)
     total_actual = sum(p["actual_cost"] for p in pos)
     total_budget = sum(p["budget"] for p in pos)
@@ -221,9 +225,11 @@ async def dashboard(user: Annotated[dict, Depends(current_user)]):
     margin = round(profit / total_po * 100, 1) if total_po else 0
     utilization = round(total_actual / total_budget * 100, 1) if total_budget else 0
 
+    cost_match = {"project_name": selected} if selected else {}
+
     # monthly trend (Jan-Aug 2026)
     months = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"]
-    trend_pipe = [{"$group": {"_id": "$month", "total": {"$sum": "$amount"}}}]
+    trend_pipe = ([{"$match": cost_match}] if cost_match else []) + [{"$group": {"_id": "$month", "total": {"$sum": "$amount"}}}]
     trend_raw = await db.costs.aggregate(trend_pipe).to_list(100)
     trend_map = {t["_id"]: t["total"] for t in trend_raw}
     trend = [{"month": m, "label": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"][i], "total": float(trend_map.get(m, 0))} for i, m in enumerate(months)]
@@ -234,16 +240,18 @@ async def dashboard(user: Annotated[dict, Depends(current_user)]):
     total_cost = total_actual or 1
     cost_by_project = [{"name": p["project_name"], "pct": round(p["actual_cost"] / total_cost * 100)} for p in pos if p["actual_cost"] > 0]
 
-    cat_pipe = [{"$group": {"_id": "$post", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}]
+    cat_pipe = ([{"$match": cost_match}] if cost_match else []) + [{"$group": {"_id": "$post", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}]
     cat_raw = await db.costs.aggregate(cat_pipe).to_list(100)
     cost_by_category = [{"name": c["_id"] or "Lainnya", "pct": round(c["total"] / total_cost * 100)} for c in cat_raw]
 
-    user_pipe = [{"$group": {"_id": "$submitted_by", "total": {"$sum": "$amount"}, "role": {"$first": "$role"}}}, {"$sort": {"total": -1}}, {"$limit": 5}]
+    user_pipe = ([{"$match": cost_match}] if cost_match else []) + [{"$group": {"_id": "$submitted_by", "total": {"$sum": "$amount"}, "role": {"$first": "$role"}}}, {"$sort": {"total": -1}}, {"$limit": 5}]
     user_raw = await db.costs.aggregate(user_pipe).to_list(100)
     cost_by_user = [{"name": u["_id"] or "-", "role": u.get("role") or "", "total": float(u["total"])} for u in user_raw]
 
     return {
         "greeting_name": user["name"].split(" ")[0],
+        "projects": projects,
+        "selected_project": project or "All Project",
         "total_profit": profit,
         "profit_margin": margin,
         "total_po": total_po,
