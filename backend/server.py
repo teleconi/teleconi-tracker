@@ -27,7 +27,7 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 TOKEN_MINUTES = int(os.environ.get("ACCESS_TOKEN_MINUTES", "720"))
 
-ROLES = {"Owner", "Engineer", "Project Manager", "Project Controller"}
+ROLES = {"Owner", "Engineer", "PM", "Project Manager", "Project Controller"}
 CATEGORIES = ["Makan", "Penginapan", "Transport", "Others"]
 CURRENT_MONTH = "2026-08"
 
@@ -222,7 +222,7 @@ async def list_pos(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/pos", response_model=PO)
 async def create_po(body: POCreate, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "Project Manager"):
+    if user["role"] not in ("Owner", "PM", "Project Manager"):
         raise HTTPException(status_code=403, detail="Only Owner or Project Manager can add POs")
     existing = await db.pos.find_one({"po_number": body.po_number})
     if existing:
@@ -283,7 +283,7 @@ async def list_employees(user: Annotated[dict, Depends(current_user)]):
 
 @api.post("/salaries/toggle")
 async def toggle_salary(body: dict, user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "Project Manager"):
+    if user["role"] not in ("Owner", "PM", "Project Manager"):
         raise HTTPException(status_code=403, detail="Not allowed to change payment status")
     employee_id = body.get("employee_id")
     existing = await db.salaries.find_one({"employee_id": employee_id, "month": CURRENT_MONTH})
@@ -294,7 +294,7 @@ async def toggle_salary(body: dict, user: Annotated[dict, Depends(current_user)]
 
 @api.post("/salaries/pay-all")
 async def pay_all(user: Annotated[dict, Depends(current_user)]):
-    if user["role"] not in ("Owner", "Project Manager"):
+    if user["role"] not in ("Owner", "PM", "Project Manager"):
         raise HTTPException(status_code=403, detail="Not allowed to change payment status")
     users = await db.users.find({}, {"employee_id": 1}).to_list(1000)
     for u in users:
@@ -308,11 +308,11 @@ app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], 
 
 # ---- seed ----
 DEMO_USERS = [
-    {"employee_id": "00101", "name": "Andi Saputra", "role": "Owner", "password": "owner123", "email": "andi@telecony.id", "ktp": "3174010101990001", "join_date": "12 Jan 2024", "bpjs": "Active", "salary_amount": 20_000_000},
-    {"employee_id": "00201", "name": "Budi Santoso", "role": "Engineer", "password": "eng123", "email": "budi@telecony.id", "ktp": "3174020202950002", "join_date": "03 Mar 2024", "bpjs": "Active", "salary_amount": 8_500_000},
-    {"employee_id": "00202", "name": "Citra Lestari", "role": "Project Manager", "password": "pm123", "email": "citra@telecony.id", "ktp": "3174030303920003", "join_date": "18 Feb 2024", "bpjs": "Active", "salary_amount": 12_000_000},
-    {"employee_id": "00203", "name": "Deni Kurniawan", "role": "Project Controller", "password": "pcm123", "email": "deni@telecony.id", "ktp": "3174040404930004", "join_date": "22 Apr 2024", "bpjs": "Active", "salary_amount": 9_500_000},
-    {"employee_id": "00204", "name": "Eka Wijaya", "role": "Engineer", "password": "eng123", "email": "eka@telecony.id", "ktp": "3174050505960005", "join_date": "10 May 2024", "bpjs": "Active", "salary_amount": 8_000_000},
+    {"employee_id": "00101", "name": "Teleconi", "role": "Owner", "password": "123", "email": "owner@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "Mandiri", "no_rek": "123", "salary_amount": 20_000_000},
+    {"employee_id": "00201", "name": "Pahala Sidauruk", "role": "PM", "password": "123", "email": "pahala@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7151611471", "salary_amount": 12_000_000},
+    {"employee_id": "00202", "name": "Yendro Makendro Sija", "role": "Engineer", "password": "123", "email": "yendro@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "Mandiri", "no_rek": "7151611471", "salary_amount": 8_500_000},
+    {"employee_id": "00203", "name": "Rofinus Hada", "role": "Engineer", "password": "123", "email": "rofinus@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7795330801", "salary_amount": 8_000_000},
+    {"employee_id": "00204", "name": "Aldi Efendi", "role": "Engineer", "password": "123", "email": "aldi@teleconi.id", "ktp": "", "join_date": "01 Aug 2026", "bpjs": "Active", "bank": "BCA", "no_rek": "7535113980", "salary_amount": 8_000_000},
 ]
 
 DEMO_POS = [

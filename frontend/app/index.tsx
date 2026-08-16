@@ -42,20 +42,22 @@ const TABS: { id: Screen; label: string; icon: keyof typeof Ionicons.glyphMap }[
 ];
 
 const DEMO_ACCOUNTS = [
-  { role: "Owner", cred: "00101 / owner123" },
-  { role: "Engineer", cred: "00201 / eng123" },
-  { role: "PM", cred: "00202 / pm123" },
-  { role: "PCM", cred: "00203 / pcm123" },
+  { role: "Owner", cred: "00101 / 123" },
+  { role: "PM", cred: "00201 / 123" },
+  { role: "Engineer", cred: "00202 / 123" },
 ];
 
-type Account = { name: string; role: string; password: string; email: string; ktp: string; bpjs: string; joinDate: string; salary: string };
+type Account = { name: string; role: string; password: string; email: string; bank: string; noRek: string; joinDate: string; salary: string };
 type SessionUser = Account & { employeeId: string };
 
+const DEFAULT_PASSWORD = "123";
+
 const USERS: Record<string, Account> = {
-  "00101": { name: "Andi Saputra", role: "Owner", password: "owner123", email: "andi@projectops.local", ktp: "3174********1234", bpjs: "0001********789", joinDate: "2018-04-02", salary: "15000000" },
-  "00201": { name: "Budi Santoso", role: "Engineer", password: "eng123", email: "budi@projectops.local", ktp: "3174********2201", bpjs: "0001********201", joinDate: "2020-03-10", salary: "8500000" },
-  "00202": { name: "Citra Lestari", role: "Project Manager", password: "pm123", email: "citra@projectops.local", ktp: "3174********2202", bpjs: "0001********202", joinDate: "2019-07-18", salary: "12000000" },
-  "00203": { name: "Deni Kurniawan", role: "Project Controller", password: "pcm123", email: "deni@projectops.local", ktp: "3174********2203", bpjs: "0001********203", joinDate: "2021-02-22", salary: "9500000" },
+  "00101": { name: "Teleconi", role: "Owner", password: DEFAULT_PASSWORD, email: "owner@teleconi.id", bank: "Mandiri", noRek: "123", joinDate: "2026-08-01", salary: "20000000" },
+  "00201": { name: "Pahala Sidauruk", role: "PM", password: DEFAULT_PASSWORD, email: "pahala@teleconi.id", bank: "BCA", noRek: "7151611471", joinDate: "2026-08-01", salary: "12000000" },
+  "00202": { name: "Yendro Makendro Sija", role: "Engineer", password: DEFAULT_PASSWORD, email: "yendro@teleconi.id", bank: "Mandiri", noRek: "7151611471", joinDate: "2026-08-01", salary: "8500000" },
+  "00203": { name: "Rofinus Hada", role: "Engineer", password: DEFAULT_PASSWORD, email: "rofinus@teleconi.id", bank: "BCA", noRek: "7795330801", joinDate: "2026-08-01", salary: "8000000" },
+  "00204": { name: "Aldi Efendi", role: "Engineer", password: DEFAULT_PASSWORD, email: "aldi@teleconi.id", bank: "BCA", noRek: "7535113980", joinDate: "2026-08-01", salary: "8000000" },
 };
 
 const initials = (name: string) => name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -218,11 +220,11 @@ const TREND = [
   { m: "May", h: 58 }, { m: "Jun", h: 65 }, { m: "Jul", h: 76 }, { m: "Aug", h: 100 },
 ];
 const COST_BY_USER = [
-  { name: "Budi Santoso", role: "Engineer", amt: "Rp18,2M" },
-  { name: "Andi Saputra", role: "Engineer", amt: "Rp15,4M" },
-  { name: "Citra Lestari", role: "PM", amt: "Rp12,8M" },
-  { name: "Deni Kurniawan", role: "Engineer", amt: "Rp11,7M" },
-  { name: "Eka Wijaya", role: "Engineer", amt: "Rp9,8M" },
+  { name: "Yendro Makendro Sija", role: "Engineer", amt: "Rp18,2M" },
+  { name: "Rofinus Hada", role: "Engineer", amt: "Rp15,4M" },
+  { name: "Pahala Sidauruk", role: "PM", amt: "Rp12,8M" },
+  { name: "Aldi Efendi", role: "Engineer", amt: "Rp11,7M" },
+  { name: "Teleconi", role: "Owner", amt: "Rp9,8M" },
 ];
 const COST_BY_CATEGORY = [
   { name: "Transport", desc: "Travel & local transportation", pct: 42 },
@@ -573,16 +575,18 @@ function SubmitOps({ toast }: { toast: (t: string) => void }) {
 // ---------------------------------------------------------------------------
 
 const EMPLOYEES = [
-  { name: "Andi Saputra", meta: "00101 • Owner", amt: "Rp15M" },
-  { name: "Budi Santoso", meta: "00201 • Engineer", amt: "Rp8.5M" },
-  { name: "Citra Lestari", meta: "00202 • Project Manager", amt: "Rp12M" },
-  { name: "Deni Kurniawan", meta: "00203 • Project Controller", amt: "Rp9.5M" },
+  { name: "Teleconi", meta: "00101 • Owner", amt: "Rp20M" },
+  { name: "Pahala Sidauruk", meta: "00201 • PM", amt: "Rp12M" },
+  { name: "Yendro Makendro Sija", meta: "00202 • Engineer", amt: "Rp8.5M" },
+  { name: "Rofinus Hada", meta: "00203 • Engineer", amt: "Rp8M" },
+  { name: "Aldi Efendi", meta: "00204 • Engineer", amt: "Rp8M" },
 ];
 const SALARY_ROWS = [
-  { name: "Andi Saputra", month: "Aug-26", amount: "15M", paid: true },
-  { name: "Budi Santoso", month: "Aug-26", amount: "8.5M", paid: false },
-  { name: "Citra Lestari", month: "Aug-26", amount: "12M", paid: false },
-  { name: "Deni Kurniawan", month: "Aug-26", amount: "9.5M", paid: true },
+  { name: "Teleconi", month: "Aug-26", amount: "20M", paid: true },
+  { name: "Pahala Sidauruk", month: "Aug-26", amount: "12M", paid: false },
+  { name: "Yendro Makendro Sija", month: "Aug-26", amount: "8.5M", paid: false },
+  { name: "Rofinus Hada", month: "Aug-26", amount: "8M", paid: true },
+  { name: "Aldi Efendi", month: "Aug-26", amount: "8M", paid: false },
 ];
 
 function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user: SessionUser }) {
@@ -611,11 +615,11 @@ function EmployeeManagement({ toast, user }: { toast: (t: string) => void; user:
         <Label>Nama Lengkap</Label>
         <Input value={user.name} readOnly />
         <View style={{ height: 12 }} />
-        <Label>No. KTP</Label>
-        <Input value={user.ktp} readOnly />
+        <Label>Bank</Label>
+        <Input value={user.bank} readOnly />
         <View style={{ height: 12 }} />
-        <Label>No. BPJS Kesehatan</Label>
-        <Input value={user.bpjs} readOnly />
+        <Label>No. Rekening</Label>
+        <Input value={user.noRek} readOnly />
         <View style={{ height: 12 }} />
         <Label>Alamat Rumah</Label>
         <TextInput testID="user-address-input" value={address} onChangeText={setAddress} multiline style={[styles.input, styles.textarea]} />
